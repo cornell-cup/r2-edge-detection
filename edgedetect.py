@@ -1,10 +1,11 @@
 import math
 import time
-from builtins import int, len, range, list, float
+# from builtins import int, len, range, list, float
 from PIL import Image
 import sys
 import numpy as np
 import cv2
+import matplotlib.pyplot as plt
 
 #  TODO: Fix this freaking virtual environment so we don't have
 #   a ton of import statements
@@ -84,8 +85,15 @@ def main():
     #  TODO: Write code with the object detection script to return bounding box coordinates
     #   for now, just assume that the bounding box is the whole image, and no cropping is necessary.
     #   Also need to determine what threshold values we need to use through adjustment, not hard code
+    original_img = Image.open(sys.argv[1])
+    original_img.show()
     edge_image = canny_edge(image_file, 25, 55)
-    edge_image.show()
+    # cv2.imshow("edges", edge_image)
+
     time.sleep(5)
+    edge_image = Image.open(edge_image)
+    edge_image.show()
     mid = midpoint(0, 0, width, height)
-    print(shortest_path(edge_image, mid, int(width/2), height))
+    # print(shortest_path(edge_image, mid, int(width/2), height))
+
+main()
