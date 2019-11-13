@@ -1,5 +1,6 @@
+import math
 import time
-from builtins import int, len, range, list
+from builtins import int, len, range, list, float
 from PIL import Image
 import sys
 import numpy as np
@@ -10,9 +11,9 @@ import cv2
 
 #  takes in input in the form of two corners of the bounding box
 #  across a diagonal from each other.
-#  returns a tuple of ints in the form of (x, y) of the midpoint
+#  returns a list of ints in the form of (x, y) of the midpoint
 def midpoint(x1, y1, x2, y2):
-    return int((x2 - x1)/2), int((y2 + y1)/2)
+    return [int((x2 - x1)/2), int((y2 + y1)/2)]
 
 
 #  takes in input in the form of two corners of the bounding box
@@ -37,7 +38,8 @@ def canny_edge(image_file, t1, t2):
     edge = cv2.Canny(blurred, t1, t2)
     return edge
 
-
+def distance(x1, y1, x2, y2):
+    return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 #  uses the canny edge image and the midpoint to determine the two points
 #  that the robot arm needs to grab
 def shortest_path(edge, mid, w, h):
@@ -48,9 +50,27 @@ def shortest_path(edge, mid, w, h):
         for j in range(mid[1] - h, mid[1] + h):
             r, g, b = edge.getpixel(i, j)
             if r == g == b == 0:
-                pix_val.append((i, j))
+                pix_val.append([i, j])
 
-    return 0
+    min_distance = float("inf")
+
+    val_x1, val_y1, val_x2, val_y2 = -1
+    for coor in pix_val:
+        cols, rows = pix_val[0], pix_val[1]
+        theta = math.atan2((rows-mid[1]), (cols-mid[0]))
+        for radius in range(math.sqrt((w*2)**2+(h)**2)):
+            new_col = mid[0] + math.cos(theta)*radius
+            new_row = mid[1] + math.sin(theta)*radius
+            r, g, b = edge.getpixel(new_col, new_row)
+            if r == g == b == 0:
+                dist = distance(new_col, new_row, cols, rows)
+                if dist < min_distance:
+                    val_x1 = new_col
+                    val_y1 = new_row
+                    val_x2 = cols
+                    val_y2 = rows
+                    min_distance = dist
+    return "Shortest path: ", val_x1, val_y1, " to ", val_x2, val_y2, " Distance: ", min_distance
 
 
 #  assumes sys.argv[1] (first argument after the python script call)
@@ -68,4 +88,4 @@ def main():
     edge_image.show()
     time.sleep(5)
     mid = midpoint(0, 0, width, height)
-    print(shortest_path(edge_image, mid, int(width/2), int(height/2)))
+    print(shortest_path(edge_image, mid, int(width/2), height))
