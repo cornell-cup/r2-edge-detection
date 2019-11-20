@@ -1,11 +1,13 @@
 import math
 import time
-# from builtins import int, len, range, list, float
+from builtins import int, len, range, list, float, sorted, max, min
+
+import numpy as np
 from PIL import Image
 import sys
-import numpy as np
 import cv2
-import matplotlib.pyplot as plt
+import imutils
+
 
 #  TODO: Fix this freaking virtual environment so we don't have
 #   a ton of import statements
@@ -23,20 +25,51 @@ def midpoint(x1, y1, x2, y2):
 def crop(x1, y1, x2, y2, image):
     return image.crop((x1, y1, x2, y2))
 
+def auto_canny(image, sigma=0.33):
+    # compute the median of the single channel pixel intensities
+    v = np.median(image)
+
+    # apply automatic Canny edge detection using the computed median
+    lower = int(max(0, (1.0 - sigma) * v))
+    upper = int(min(255, (1.0 + sigma) * v))
+    edged = cv2.Canny(image, lower, upper)
+
+    # return the edged image
+    return edged
+
 
 #  applies Gaussian blur and canny edge detection to the image
 #  parameters are the image file, the midpoint, and canny edge
 #  thresholds
-def canny_edge(image_file, t1, t2):
-    src = cv2.imread(image_file, cv2.IMREAD_GRAYSCALE)
-
+def canny_edge(image_file):
+    src = cv2.cvtColor(image_file, cv2.IMREAD_GRAYSCALE)
     #  TODO: Like the threshold values for canny edge, we need
     #   to determine the kernel values for Gaussian blur
     #  apply Gaussian blur on src image
+
+    # TODO: Implement findContours to get the outline of the object:
+    #  https://www.pyimagesearch.com/2014/04/21/building-pokedex-python-finding-game-boy-screen-step-4-6/
     blurred = cv2.GaussianBlur(src, (5, 5), cv2.BORDER_DEFAULT)
 
     #  apply canny edge detection to the blurred image
-    edge = cv2.Canny(blurred, t1, t2)
+    edge = auto_canny(blurred)
+    x = edge.copy()
+    cnts = cv2.findContours(x, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    cnts = imutils.grab_contours(cnts)
+    # cnts = sorted(cnts, key = cv2.contourArea, reverse = True)[:10]
+    ## circle = cv2.circle(edge, (50, 50), 30, (255, 0, 0), 3)
+
+    cv2.drawContours(x, cnts, -1, (255, 0, 0), 3)
+    cv2.imshow("Contours", x)
+    cv2.waitKey(0)
+    cnts = cv2.findContours(x, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    cnts = imutils.grab_contours(cnts)
+    cnts = sorted(cnts, key = cv2.contourArea, reverse = True) # [:10]
+    k = edge.copy()
+    # print("Contours: ", cnts)
+    cv2.drawContours(k, [cnts[0]], -1, (255, 255, 0), 3)
+    cv2.imshow("Contours", k)
+    cv2.waitKey(0)
     return edge
 
 def distance(x1, y1, x2, y2):
@@ -84,15 +117,19 @@ def main():
         width, height = image.size
     #  TODO: Write code with the object detection script to return bounding box coordinates
     #   for now, just assume that the bounding box is the whole image, and no cropping is necessary.
-    #   Also need to determine what threshold values we need to use through adjustment, not hard code
     original_img = Image.open(sys.argv[1])
-    original_img.show()
-    edge_image = canny_edge(image_file, 25, 55)
-    # cv2.imshow("edges", edge_image)
+    opencvimage = cv2.cvtColor(np.array(original_img), cv2.COLOR_RGB2BGR)
 
-    time.sleep(5)
-    edge_image = Image.open(edge_image)
-    edge_image.show()
+
+    edge_image = canny_edge(opencvimage)
+    cv2.imshow("edges", edge_image)
+    cv2.waitKey(0)
+    #  time.sleep(5)
+    print("slept!")
+    #  original_img.close()
+
+    #  edge_image = Image.open(edge_image)
+    #  edge_image.show()
     mid = midpoint(0, 0, width, height)
     # print(shortest_path(edge_image, mid, int(width/2), height))
 
