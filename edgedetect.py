@@ -6,6 +6,7 @@ import sys
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+from matplotlib import cm
 
 #  TODO: Fix this freaking virtual environment so we don't have
 #   a ton of import statements
@@ -49,33 +50,34 @@ def shortest_path(edge, mid, w, h):
     half_rows = mid[1]
     total_cols = w
     total_rows = h
-
+    edge = Image.fromarray(edge)
+    edge = edge.convert('RGB')
     #  range goes from halfway through the x direction and
     #  the whole way in the y direction
     for i in range(half_cols):
         for j in range(total_rows):
-            r, g, b = edge.getpixel(i, j)
+            r, g, b = edge.getpixel((i, j))
             if r == g == b == 255:
                 pix_val.append([i, j])
 
     min_distance = float("inf")
 
-    val_x1, val_y1, val_x2, val_y2 = -1
+    val_x1, val_y1, val_x2, val_y2 = -1, -1, -1, -1
 
     for coor in pix_val:
         col, row = coor[0], coor[1]
-        theta = math.atan2((col - half_cols), (row - half_rows))
-        for radius in range(math.sqrt((total_rows)**2+(total_cols)**2)):
+        theta = math.atan2((half_cols - col), (half_rows - row))
+        for radius in range(int(min(total_rows, total_cols)/2)):
             new_col = mid[0] + math.cos(theta)*radius
             new_row = mid[1] + math.sin(theta)*radius
-            r, g, b = edge.getpixel(new_col, new_row)
-            if r == g == b == 0:
-                dist = distance(new_col, new_row, cols, rows)
+            r, g, b = edge.getpixel((new_col, new_row))
+            if r == g == b == 255:
+                dist = distance(new_col, new_row, col, row)
                 if dist < min_distance:
                     val_x1 = new_col
                     val_y1 = new_row
-                    val_x2 = cols
-                    val_y2 = rows
+                    val_x2 = col
+                    val_y2 = row
                     min_distance = dist
     return "Shortest path: ", val_x1, val_y1, " to ", val_x2, val_y2, " Distance: ", min_distance
 
@@ -92,11 +94,11 @@ def main():
     #   for now, just assume that the bounding box is the whole image, and no cropping is necessary.
     #   Also need to determine what threshold values we need to use through adjustment, not hard code
     original_img = Image.open(sys.argv[1])
-    original_img.show()
+    # original_img.show()
     edge_image = canny_edge(image_file, 25, 55)
-    # cv2.imshow("edges", edge_image)
-    cv2.imshow("edges", edge_image)
-    cv2.waitKey(0)
+
+    im = plt.imshow(edge_image)
+    # plt.show()
     mid = midpoint(0, 0, width, height)
     print(shortest_path(edge_image, mid, width, height))
 
