@@ -45,21 +45,27 @@ def distance(x1, y1, x2, y2):
 #  that the robot arm needs to grab
 def shortest_path(edge, mid, w, h):
     pix_val = []
+    half_cols = mid[0]
+    half_rows = mid[1]
+    total_cols = w
+    total_rows = h
+
     #  range goes from halfway through the x direction and
     #  the whole way in the y direction
-    for i in range(mid[0] - w, mid[0]):
-        for j in range(mid[1] - h, mid[1] + h):
+    for i in range(half_cols):
+        for j in range(total_rows):
             r, g, b = edge.getpixel(i, j)
-            if r == g == b == 0:
+            if r == g == b == 255:
                 pix_val.append([i, j])
 
     min_distance = float("inf")
 
     val_x1, val_y1, val_x2, val_y2 = -1
+
     for coor in pix_val:
-        cols, rows = pix_val[0], pix_val[1]
-        theta = math.atan2((rows-mid[1]), (cols-mid[0]))
-        for radius in range(math.sqrt((w*2)**2+(h)**2)):
+        col, row = coor[0], coor[1]
+        theta = math.atan2((col - half_cols), (row - half_rows))
+        for radius in range(math.sqrt((total_rows)**2+(total_cols)**2)):
             new_col = mid[0] + math.cos(theta)*radius
             new_row = mid[1] + math.sin(theta)*radius
             r, g, b = edge.getpixel(new_col, new_row)
@@ -89,11 +95,9 @@ def main():
     original_img.show()
     edge_image = canny_edge(image_file, 25, 55)
     # cv2.imshow("edges", edge_image)
-
-    time.sleep(5)
-    edge_image = Image.open(edge_image)
-    edge_image.show()
+    cv2.imshow("edges", edge_image)
+    cv2.waitKey(0)
     mid = midpoint(0, 0, width, height)
-    # print(shortest_path(edge_image, mid, int(width/2), height))
+    print(shortest_path(edge_image, mid, width, height))
 
 main()
