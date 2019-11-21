@@ -1,9 +1,9 @@
 import math
 import time
 from builtins import int, len, range, list, float, sorted, max, min
-
+import matplotlib.pyplot as plt
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 import sys
 import cv2
 import imutils
@@ -110,6 +110,7 @@ def shortest_path(edge, mid, w, h):
                     val_x2 = col
                     val_y2 = row
                     min_distance = dist
+    
     return "Shortest path: ", val_x1, val_y1, " to ", val_x2, val_y2, " Distance: ", min_distance
 
 
