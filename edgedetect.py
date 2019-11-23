@@ -95,10 +95,10 @@ def distance(x1, y1, x2, y2):
     return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 #  uses the canny edge image and the midpoint to determine the two points
 #  that the robot arm needs to grab
-def shortest_path(edge, mid, w, h):
+def shortest_path(edge, mid_contour, w, h):
     pix_val = []
-    half_cols = mid[0]
-    half_rows = mid[1]
+    half_cols = w//2
+    half_rows = h//2
     total_cols = w
     total_rows = h
     edge = Image.fromarray(edge)
@@ -117,29 +117,33 @@ def shortest_path(edge, mid, w, h):
 
     for coor in pix_val:
         col, row = coor[0], coor[1]
-        theta = math.atan2((half_cols - col), (half_rows - row))
+        theta = math.atan2((mid_contour[0] - col), (mid_contour[1] - row))
         for radius in range(int(min(total_rows, total_cols)/2)):
-            new_col = mid[0] + math.cos(theta)*radius
-            new_row = mid[1] + math.sin(theta)*radius
+            new_col = min(mid_contour[0] + math.sin(theta)*radius, total_cols-1)
+            new_row = min(mid_contour[1] + math.cos(theta)*radius, total_rows-1)
+            # print((new_col, new_row))
             r, g, b = edge.getpixel((new_col, new_row))
             if r == g == b == 255:
                 dist = distance(new_col, new_row, col, row)
                 if dist < min_distance:
-                    val_x1 = new_col
-                    val_y1 = new_row
-                    val_x2 = col
-                    val_y2 = row
+                    val_x1 = col
+                    val_y1 = row
+                    val_x2 = new_col
+                    val_y2 = new_row
                     min_distance = dist
 
     # imcv = cv2.cvtColor(np.asarray(edge), cv2.COLOR_RGB2BGR)
     # cv2.imshow("shortest_works", imcv)
     # print("Please work")
     draw = ImageDraw.Draw(edge)
-    draw.ellipse((val_x1-2, val_y1-2, val_x1+2, val_y1+2), fill = 'blue', outline ='blue')
-    draw.ellipse((val_x2-2, val_y2-2, val_x2+2, val_y2+2), fill = 'blue', outline ='blue')
-    draw.ellipse((half_cols-5, half_rows-5, half_cols+5, half_rows+5), fill = 'blue', outline ='blue')
+    draw.ellipse((val_x1-5, val_y1-5, val_x1+5, val_y1+5), fill = 'blue', outline ='blue')
+    draw.ellipse((val_x2-5, val_y2-5, val_x2+5, val_y2+5), fill = 'blue', outline ='blue')
+    # draw.ellipse((half_cols-5, half_rows-5, half_cols+5, half_rows+5), fill = 'blue', outline ='blue')
+    print(mid_contour)
+    draw.ellipse((mid_contour[0]-5, mid_contour[1]-5, mid_contour[0]+5, mid_contour[1]+5), fill = 'blue', outline ='blue')
+
     edge.show()
-    
+
     return "Shortest path: ", val_x1, val_y1, " to ", val_x2, val_y2, " Distance: ", min_distance
 
 
