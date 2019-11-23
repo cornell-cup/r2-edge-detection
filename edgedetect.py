@@ -141,7 +141,6 @@ def shortest_path(edge, mid_contour, w, h):
     # draw.ellipse((half_cols-5, half_rows-5, half_cols+5, half_rows+5), fill = 'blue', outline ='blue')
     print(mid_contour)
     draw.ellipse((mid_contour[0]-5, mid_contour[1]-5, mid_contour[0]+5, mid_contour[1]+5), fill = 'blue', outline ='blue')
-
     edge.show()
 
     return "Shortest path: ", val_x1, val_y1, " to ", val_x2, val_y2, " Distance: ", min_distance
