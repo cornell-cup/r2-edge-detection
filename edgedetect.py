@@ -89,7 +89,7 @@ def canny_edge(image_file, width, height):
     M = cv2.moments(cnts[0])
     cX = int(M["m10"] / M["m00"])
     cY = int(M["m01"] / M["m00"])
-    return k, cX, cY
+    return k, [cX, cY]
 
 def distance(x1, y1, x2, y2):
     return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
@@ -168,7 +168,7 @@ def main():
     #  edge_image.show()
 
     mid = midpoint(0, 0, width, height)
-    print(shortest_path(edge_image, mid, width, height))
+    print(shortest_path(edge_image, ceRet[1], width, height))
     cv2.destroyAllWindows()
 
 main()
