@@ -41,19 +41,12 @@ def auto_canny(image, sigma=0.33):
 #  parameters are the image file, the midpoint, and canny edge
 #  thresholds
 def canny_edge(image_file):
-    src = cv2.cvtColor(image_file, cv2.IMREAD_GRAYSCALE)
+    src = cv2.cvtColor(image_file, cv2.COLOR_BGR2GRAY)
     #  TODO: Like the threshold values for canny edge, we need
     #   to determine the kernel values for Gaussian blur
     #  apply Gaussian blur on src image
 
-    # TODO: Implement findContours to get the outline of the object:
-    #  https://www.pyimagesearch.com/2014/04/21/building-pokedex-python-finding-game-boy-screen-step-4-6/
-
-    blurred = cv2.GaussianBlur(image_file, (5, 5), cv2.BORDER_DEFAULT)
-    cv2.imshow("Source Image", src)
-    cv2.waitKey(0)
-    cv2.imshow("Blurred", blurred)
-    cv2.waitKey(0)
+    blurred = cv2.GaussianBlur(image_file, (9, 9), cv2.BORDER_DEFAULT)
     #  apply canny edge detection to the blurred image
     edge = auto_canny(src)
     x = edge.copy()
@@ -73,17 +66,17 @@ def canny_edge(image_file):
     #-----Converting image from LAB Color model to RGB model--------------------
     final = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
     cv2.imshow('final', final)
-
     edge = auto_canny(final)
     x = edge.copy()
-    cv2.drawContours(x, cnts, -1, (255, 0, 0), 5)
+    cv2.drawContours(x, cnts, -1, (255, 0, 0), 1)
     cv2.imshow("Contours", x)
     cv2.waitKey(0)
     cnts = cv2.findContours(x, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     cnts = imutils.grab_contours(cnts)
-    cnts = sorted(cnts, key = cv2.contourArea, reverse = True) [:10]
+    cnts = sorted(cnts, key = cv2.contourArea, reverse = True) [:3]
     k = src.copy()
-    # print("Contours: ", cnts)
+    print("Contours: ", cnts)
+
     cv2.drawContours(k, [cnts[0]], -1, (255, 255, 0), 1)
     cv2.imshow("Contours", k)
     cv2.waitKey(0)
@@ -158,5 +151,6 @@ def main():
 
     mid = midpoint(0, 0, width, height)
     print(shortest_path(edge_image, mid, width, height))
+    cv2.destroyAllWindows()
 
 main()
