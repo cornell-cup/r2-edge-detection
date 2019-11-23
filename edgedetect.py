@@ -48,25 +48,43 @@ def canny_edge(image_file):
 
     # TODO: Implement findContours to get the outline of the object:
     #  https://www.pyimagesearch.com/2014/04/21/building-pokedex-python-finding-game-boy-screen-step-4-6/
-    blurred = cv2.GaussianBlur(src, (5, 5), cv2.BORDER_DEFAULT)
 
+    blurred = cv2.GaussianBlur(image_file, (5, 5), cv2.BORDER_DEFAULT)
+    cv2.imshow("Source Image", src)
+    cv2.waitKey(0)
+    cv2.imshow("Blurred", blurred)
+    cv2.waitKey(0)
     #  apply canny edge detection to the blurred image
-    edge = auto_canny(blurred)
+    edge = auto_canny(src)
     x = edge.copy()
     cnts = cv2.findContours(x, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     cnts = imutils.grab_contours(cnts)
-    # cnts = sorted(cnts, key = cv2.contourArea, reverse = True)[:10]
-    ## circle = cv2.circle(edge, (50, 50), 30, (255, 0, 0), 3)
 
-    cv2.drawContours(x, cnts, -1, (255, 0, 0), 3)
+    l, a, b = cv2.split(blurred)
+
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+    cl = clahe.apply(l)
+    cv2.imshow('CLAHE output', cl)
+
+    #-----Merge the CLAHE enhanced L-channel with the a and b channel-----------
+    limg = cv2.merge((cl,a,b))
+    cv2.imshow('limg', limg)
+
+    #-----Converting image from LAB Color model to RGB model--------------------
+    final = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+    cv2.imshow('final', final)
+
+    edge = auto_canny(final)
+    x = edge.copy()
+    cv2.drawContours(x, cnts, -1, (255, 0, 0), 5)
     cv2.imshow("Contours", x)
     cv2.waitKey(0)
     cnts = cv2.findContours(x, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     cnts = imutils.grab_contours(cnts)
-    cnts = sorted(cnts, key = cv2.contourArea, reverse = True) # [:10]
-    k = edge.copy()
+    cnts = sorted(cnts, key = cv2.contourArea, reverse = True) [:10]
+    k = src.copy()
     # print("Contours: ", cnts)
-    cv2.drawContours(k, [cnts[0]], -1, (255, 255, 0), 3)
+    cv2.drawContours(k, [cnts[0]], -1, (255, 255, 0), 1)
     cv2.imshow("Contours", k)
     cv2.waitKey(0)
     return edge
