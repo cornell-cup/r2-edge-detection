@@ -174,4 +174,5 @@ def main():
     print(shortest_path(edge_image, ceRet[1], width, height))
     cv2.destroyAllWindows()
 
+
 main()
