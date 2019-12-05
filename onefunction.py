@@ -11,8 +11,8 @@ import imutils
 #  TODO: Fix this freaking virtual environment so we don't have
 #   a ton of import statements
 
-def grabPointsImage(x1, y1, width_box, height_box, im):
-    grabPoints(x1, y1, width_box, height_box, cv2.imread(im, cv2.COLOR_RGB2BGR))
+# def grabPointsImage(x1, y1, width_box, height_box, im):
+#     grabPoints(x1, y1, width_box, height_box, cv2.imread(im, cv2.COLOR_RGB2BGR))
 
 def grabPoints(x1, y1, width_box, height_box, image):
     def auto_canny(image, sigma=0.33):
@@ -75,6 +75,7 @@ def grabPoints(x1, y1, width_box, height_box, image):
     def shortest_path(edge, mid_contour, w, h):
         pix_val = []
         half_cols = w//2
+        half_rows = h//2
         total_cols = w
         total_rows = h
         edge = Image.fromarray(edge)
@@ -111,7 +112,7 @@ def grabPoints(x1, y1, width_box, height_box, image):
         # draw = ImageDraw.Draw(edge)
         # draw.ellipse((val_x1-5, val_y1-5, val_x1+5, val_y1+5), fill = 'blue', outline ='blue')
         # draw.ellipse((val_x2-5, val_y2-5, val_x2+5, val_y2+5), fill = 'blue', outline ='blue')
-        # draw.ellipse((half_cols-5, half_rows-5, half_cols+5, half_rows+5), fill = 'blue', outline ='blue')
+        # # draw.ellipse((half_cols-5, half_rows-5, half_cols+5, half_rows+5), fill = 'blue', outline ='blue')
         # draw.ellipse((mid_contour[0]-5, mid_contour[1]-5, mid_contour[0]+5, mid_contour[1]+5), fill = 'blue', outline ='blue')
         # edge.show()
 
@@ -135,8 +136,8 @@ def grabPoints(x1, y1, width_box, height_box, image):
     mid = [int((width)/2), int((height)/2)]
     shortest_x1, shortest_y1, shortest_x2, shortest_y2, shortest_dist = shortest_path(edge_image, ceRet[1], width, height)
     # cv2.destroyAllWindows()
-    print(shortest_x1 + x1, shortest_y1 + y1, shortest_x2 + x1, shortest_y2 + y1, shortest_dist)
+    return shortest_x1 + x1, shortest_y1 + y1, shortest_x2 + x1, shortest_y2 + y1, shortest_dist
 
-image = Image.open(sys.argv[1])
-width, height = image.size
-grabPointsImage(0, 0, width, height, image)
+# image = Image.open(sys.argv[1])
+# width, height = image.size
+# grabPoints(0, 0, width, height, np.array(image))
