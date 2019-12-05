@@ -11,10 +11,12 @@ import imutils
 #  TODO: Fix this freaking virtual environment so we don't have
 #   a ton of import statements
 
+def grabPointsImage(x1, y1, width_box, height_box, im):
+    grabPoints(x1, y1, width_box, height_box, cv2.imread(im, cv2.COLOR_RGB2BGR))
 
 def grabPoints(x1, y1, width_box, height_box, image):
     def auto_canny(image, sigma=0.33):
-        # compute the median of the single channel pixel intensities
+        # compute the medisan of the single channel pixel intensities
         v = np.median(image)
 
         # apply automatic Canny edge detection using the computed median
@@ -124,7 +126,7 @@ def grabPoints(x1, y1, width_box, height_box, image):
     cropped_image = raw_img[y1:y1+height_box, x1:x1+width_box]
     # cropped_image = raw_img.crop((x1, y1, x1 + width_box, y1 - height_box))
 
-    opencvimage = cv2.cvtColor(np.array(cropped_image), cv2.COLOR_RGB2BGR)
+    opencvimage = cv2.cvtColor(cropped_image, cv2.COLOR_RGB2BGR)
 
     ceRet = canny_edge(opencvimage, width, height)
     edge_image = ceRet[0]
@@ -133,5 +135,8 @@ def grabPoints(x1, y1, width_box, height_box, image):
     mid = [int((width)/2), int((height)/2)]
     shortest_x1, shortest_y1, shortest_x2, shortest_y2, shortest_dist = shortest_path(edge_image, ceRet[1], width, height)
     # cv2.destroyAllWindows()
-    return shortest_x1 + x1, shortest_y1 + y1, shortest_x2 + x1, shortest_y2 + y1, shortest_dist
+    print(shortest_x1 + x1, shortest_y1 + y1, shortest_x2 + x1, shortest_y2 + y1, shortest_dist)
 
+image = Image.open(sys.argv[1])
+width, height = image.size
+grabPointsImage(0, 0, width, height, image)

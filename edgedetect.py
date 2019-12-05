@@ -154,11 +154,13 @@ def main():
         image_file = sys.argv[1]
     with Image.open(image_file) as image:
         width, height = image.size
+
+
     #  TODO: Write code with the object detection script to return bounding box coordinates
     #   for now, just assume that the bounding box is the whole image, and no cropping is necessary.
     original_img = Image.open(sys.argv[1])
+    print(type(original_img))
     opencvimage = cv2.cvtColor(np.array(original_img), cv2.COLOR_RGB2BGR)
-
     ceRet = canny_edge(opencvimage, width, height)
     edge_image = ceRet[0]
     cv2.imshow("edges", edge_image)
