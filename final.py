@@ -1,9 +1,8 @@
 import math, cv2, imutils
 import numpy as np
-from PIL import Image, ImageDraw
 
 def grab_points(x1, y1, width_box, height_box, image):
-    
+
     def auto_canny(image, sigma=0.33):
         # compute the median of the single channel pixel intensities
         v = np.median(image)
@@ -67,21 +66,19 @@ def grab_points(x1, y1, width_box, height_box, image):
 
     #  uses the canny edge image and the midpoint to determine the two points
     #  that the robot arm needs to grab
+    #  uses the canny edge image and the midpoint to determine the two points
+    #  that the robot arm needs to grab
     def shortest_path(edge, mid_contour, w, h):
         pix_val = []
         half_cols = w//2
-        half_rows = h//2
         total_cols = w
         total_rows = h
-        edge = Image.fromarray(edge)
-        edge = edge.convert('RGB')
-
         #  range goes from halfway through the x direction and
         #  the whole way in the y direction
         for i in range(half_cols):
             for j in range(total_rows):
-                r, g, b = edge.getpixel((i, j))
-                if r == g == b == 255:
+                g = edge[j][i][1]
+                if g == 255:
                     pix_val.append([i, j])
 
         min_distance = float("inf")
@@ -94,8 +91,8 @@ def grab_points(x1, y1, width_box, height_box, image):
             for radius in range(int(min(total_rows, total_cols)/2)):
                 new_col = min(mid_contour[0] + math.sin(theta)*radius, total_cols-1)
                 new_row = min(mid_contour[1] + math.cos(theta)*radius, total_rows-1)
-                r, g, b = edge.getpixel((new_col, new_row))
-                if r == g == b == 255:
+                g = edge[int(new_row)][int(new_col)][1]
+                if g == 255:
                     dist = distance(new_col, new_row, col, row)
                     if dist < min_distance:
                         val_x1 = col
@@ -104,12 +101,14 @@ def grab_points(x1, y1, width_box, height_box, image):
                         val_y2 = new_row
                         min_distance = dist
 
-        # Code to draw the image
-        draw = ImageDraw.Draw(edge)
-        draw.ellipse((val_x1-5, val_y1-5, val_x1+5, val_y1+5), fill = 'blue', outline ='blue')
-        draw.ellipse((val_x2-5, val_y2-5, val_x2+5, val_y2+5), fill = 'blue', outline ='blue')
-        draw.ellipse((mid_contour[0]-5, mid_contour[1]-5, mid_contour[0]+5, mid_contour[1]+5), fill = 'blue', outline ='blue')
-        edge.show()
+        cv2.circle(edge, (int(val_x1), int(val_y1)), 5, (255, 0, 255), -1)
+        cv2.circle(edge, (int(val_x2), int(val_y2)), 5, (255, 0, 255), -1)
+        cv2.circle(edge, (int(mid_contour[0]), int(mid_contour[1])), 5, (255, 0, 255), -1)
+
+        # Uncomment to see final image/edges/grasping points!
+        # cv2.imshow("points", edge)
+        # cv2.waitKey(0)
+
         return "Shortest path: ", val_x1, val_y1, " to ", val_x2, val_y2, " Distance: ", min_distance
 
     raw_img = image
@@ -118,5 +117,6 @@ def grab_points(x1, y1, width_box, height_box, image):
     opencvimage = cv2.cvtColor(cropped_image, cv2.COLOR_RGB2BGR)
     ceRet = canny_edge(opencvimage, width, height)
     edge_image = ceRet[0]
-    print(shortest_path(edge_image, ceRet[1], width, height))
-    cv2.destroyAllWindows()
+
+    shortest_x1, shortest_y1, shortest_x2, shortest_y2, shortest_dist = shortest_path(edge_image, ceRet[1], width, height)
+    return shortest_x1 + x1, shortest_y1 + y1, shortest_x2 + x1, shortest_y2 + y1, shortest_dist
