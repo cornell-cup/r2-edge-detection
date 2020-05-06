@@ -3,7 +3,7 @@ import time
 from builtins import int, len, range, list, float, sorted, max, min
 # import matplotlib.pyplot as plt
 import numpy as np
-from PIL import Image, ImageDraw
+#  from PIL import Image, ImageDraw
 import sys
 import cv2
 import imutils
@@ -98,17 +98,14 @@ def distance(x1, y1, x2, y2):
 def shortest_path(edge, mid_contour, w, h):
     pix_val = []
     half_cols = w//2
-    half_rows = h//2
     total_cols = w
     total_rows = h
-    edge = Image.fromarray(edge)
-    edge = edge.convert('RGB')
     #  range goes from halfway through the x direction and
     #  the whole way in the y direction
     for i in range(half_cols):
         for j in range(total_rows):
-            r, g, b = edge.getpixel((i, j))
-            if r == g == b == 255:
+            g = edge[j][i][1]
+            if g == 255:
                 pix_val.append([i, j])
 
     min_distance = float("inf")
@@ -122,8 +119,8 @@ def shortest_path(edge, mid_contour, w, h):
             new_col = min(mid_contour[0] + math.sin(theta)*radius, total_cols-1)
             new_row = min(mid_contour[1] + math.cos(theta)*radius, total_rows-1)
             # print((new_col, new_row))
-            r, g, b = edge.getpixel((new_col, new_row))
-            if r == g == b == 255:
+            g = edge[int(new_row)][int(new_col)][1]
+            if g == 255:
                 dist = distance(new_col, new_row, col, row)
                 if dist < min_distance:
                     val_x1 = col
@@ -132,16 +129,12 @@ def shortest_path(edge, mid_contour, w, h):
                     val_y2 = new_row
                     min_distance = dist
 
-    # imcv = cv2.cvtColor(np.asarray(edge), cv2.COLOR_RGB2BGR)
-    # cv2.imshow("shortest_works", imcv)
-    # print("Please work")
-    draw = ImageDraw.Draw(edge)
-    draw.ellipse((val_x1-5, val_y1-5, val_x1+5, val_y1+5), fill = 'blue', outline ='blue')
-    draw.ellipse((val_x2-5, val_y2-5, val_x2+5, val_y2+5), fill = 'blue', outline ='blue')
-    # draw.ellipse((half_cols-5, half_rows-5, half_cols+5, half_rows+5), fill = 'blue', outline ='blue')
-    print(mid_contour)
-    draw.ellipse((mid_contour[0]-5, mid_contour[1]-5, mid_contour[0]+5, mid_contour[1]+5), fill = 'blue', outline ='blue')
-    edge.show()
+    cv2.circle(edge, (int(val_x1), int(val_y1)), 5, (255, 0, 255), -1)
+    cv2.circle(edge, (int(val_x2), int(val_y2)), 5, (255, 0, 255), -1)
+    cv2.circle(edge, (int(mid_contour[0]), int(mid_contour[1])), 5, (255, 0, 255), -1)
+
+    cv2.imshow("points", edge)
+    cv2.waitKey(0)
 
     return "Shortest path: ", val_x1, val_y1, " to ", val_x2, val_y2, " Distance: ", min_distance
 
@@ -166,7 +159,6 @@ def main():
     cv2.imshow("edges", edge_image)
     cv2.waitKey(0)
     #  time.sleep(5)
-    print("slept!")
     #  original_img.close()
 
     #  edge_image = Image.open(edge_image)
