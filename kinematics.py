@@ -192,9 +192,9 @@ def kinematics(xg,yg,zg):
     # ser.write(bytearray(angles_actual, 'utf8'))
     # ser.close()
 # Time taken
-startTime = datetime.now()
+# startTime = datetime.now()
 
 # Call the kinematics function
-kinematics(0,0,0.438)      #Claw points straight up (0,0,4)
-print('TIME TAKEN:')
-print(datetime.now() - startTime)
+# kinematics(0,0,0.438)      #Claw points straight up (0,0,4)
+# print('TIME TAKEN:')
+# print(datetime.now() - startTime)
