@@ -17,6 +17,14 @@ class RRTNode(object):
     Class to configure the robot precise arm arm.
     There's a point for each joint and one for each of the arm's ends.
     The starting point is set at (0,0,0) and does not change.
+    Args:
+        configuration: list of joint angles in radians. Corresponds to the 6 degrees of freedom on the arm
+        a1-- the lift angle of the base
+        a2-- the pan angle of the base
+        a3-- the lift angle of the elbow
+        a4-- the pan angle of the elbow
+        a5-- the pan angle of the wrist
+        a6-- how big to open the end effector
     INSTANCE ATTRIBUTES:
     n_links      [int]      : degrees of freedom.
     link_lengths [np array] : lengths of each link between joints.
@@ -33,11 +41,10 @@ class RRTNode(object):
                               len(points) == n_links + 1.
     """
 
-    def __init__(self, parent):
+    def __init__(self, configuration):
         """
         Initialize a configuration of a robot arm with [dof] degrees of freedom.
         """
-        self.parent = parent
         self.n_links = 2
         self.dof = 6
         self.link_lengths = np.array([2 for _ in range(dof)])
@@ -218,6 +225,7 @@ def test_simple_rrt():
     plt.plot(result[:, 0], result[:, 1], '.-')
     plt.show()
 
+
 def oc_rrt(V, E):
     """ Constructs an orientation-constrained rapidly exploring random tree (OC-RRT). Searches the constraint manifold for a
     feasible path by growing a space-filling tree T.
@@ -285,7 +293,7 @@ def oc_sample_config(angles):
     while(True):
         qrand = [random_angle() for i in range(6)]
         if valid_configuration(qrand[0], qrand[1], qrand[2], qrand[3], qrand[4], qrand[5]):
-            return 
+            return RRTNode([qrand[0], qrand[1], qrand[2], qrand[3], qrand[4], qrand[5]])
     # Loops until IK is solved successfully (qrand meets the restrictive requirements of joint angles range and avoiding
     # singularity)
         # Get a random state by repeatedly sampling new random states of the main arm angles
