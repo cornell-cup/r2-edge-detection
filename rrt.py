@@ -212,6 +212,55 @@ def test_simple_rrt():
     plt.plot(result[:, 0], result[:, 1], '.-')
     plt.show()
 
+def oc_rrt(V, E):
+    """ Constructs an orientation-constrained rapidly exploring random tree (OC-RRT). Searches the constraint manifold for a
+    feasible path by growing a space-filling tree T.
+
+    Args:
+        V: Set of nodes. Initially contains the start node qinit.
+        E: Set of edges. Initially is empty.
+
+    Returns:
+        Tuple (V, E)
+
+    """
+
+    # For i in n, where n is the degrees of freedom (?):
+        # Generate qrand with oc_sample_config()
+        # Select the nearest node (parent node) qnearest from all the nodes on T
+        # Attempt to generate the new node (child node) qnew by moving a step size e from qnearest towards qrand.
+        # If this path is collision-free, then qnew is added is added to V, and (qnearest,qnew) is added to E.
+
+def oc_sample_config(angles):
+    """ Generates a random node uniformly on the constraint manifold.
+    Args:
+        angles: The euler angles.
+
+    """
+    # Loops until IK is solved successfully (qrand meets the restrictive requirements of joint angles range and avoiding
+    # singularity)
+        # Get a random state by repeatedly sampling new random states of the main arm angles
+        # Tries to calculate wrist angles for given Euler angles
+    # Return a tuple containing these two values
+
+def oc_steer(qnear, qrand, angles):
+    """ Attempts to generate the new node (child node) qnew by moving a step size e from qnearest toward qrand.
+
+    Args:
+        qnear: The nearest node.
+        qrand: The node randomly generated on the constraint manifold by oc_sample_config().
+        angles: The euler angles.
+
+    """
+    # Loops until IK is solved successfully (qnew meets the restrictive requirements of joint angles range and avoiding
+    # singularity)
+        # Generates a new node by moving a small amount in the straight line from the nearest node qnearest to the
+            # randomly sampled node qrand
+        # Tries to calculate wrist angles for given Euler angles
+    # Return a tuple containing these two values
+
+
+
 
 if __name__=="__main__":
     test_simple_rrt()
