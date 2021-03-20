@@ -33,18 +33,23 @@ class Tree:
         self.sm = SpatialMap(dim=q_init.size)
         self.root = RRTNode(None, None, q_init)
         self.sm.add(q_init, self.root)
-        
+        self.nodes = []
+        self.edges = []
+        self.t = (nodes, edges)
+
     def add_node(self, q_new):
         node = RRTNode(None, None, q_new)
-        return self.sm.add(q_new, node)
+        # return self.sm.add(q_new, node)
+        return t[0].add(node)
 
     def add_edge(self, q_near, q_new, u):
-        new_node = self.sm.get_value(q_new)
-        near_node = self.sm.get_value(q_near)
-        assert np.array_equal(new_node.x, q_new)
-        assert np.array_equal(near_node.x, q_near)
-        new_node.parent = near_node
-        new_node.u = u
+        # new_node = self.sm.get_value(q_new)
+        # near_node = self.sm.get_value(q_near)
+        # assert np.array_equal(new_node.x, q_new)
+        # assert np.array_equal(near_node.x, q_near)
+        # new_node.parent = near_node
+        # new_node.u = u
+        return t[1].add((q_near, q_new))
 
     def num_nodes(self):
         return self.sm.num_values
@@ -146,10 +151,17 @@ def oc_rrt(V, E):
         # Attempt to generate the new node (child node) qnew by moving a step size e from qnearest towards qrand.
         # If this path is collision-free, then qnew is added is added to V, and (qnearest,qnew) is added to E.
 
+def nearest(t, qrand):
+    """ Select the nearest node (parent node) from all nodes on T.
+
+    Args:
+        t: Tuple of all
+    """
+
 def oc_sample_config(angles):
     """ Generates a random node uniformly on the constraint manifold.
     Args:
-        angles: The euler angles.
+        angles: The Euler angles.
 
     """
     # Loops until IK is solved successfully (qrand meets the restrictive requirements of joint angles range and avoiding
@@ -164,7 +176,7 @@ def oc_steer(qnear, qrand, angles):
     Args:
         qnear: The nearest node.
         qrand: The node randomly generated on the constraint manifold by oc_sample_config().
-        angles: The euler angles.
+        angles: The Euler angles.
 
     """
     # Loops until IK is solved successfully (qnew meets the restrictive requirements of joint angles range and avoiding
