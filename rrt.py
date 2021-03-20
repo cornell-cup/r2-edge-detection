@@ -8,6 +8,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import axes3d
 import sys
+import random
+import math
 
 
 class RRTNode(object):
@@ -230,12 +232,47 @@ def oc_rrt(V, E):
         # Attempt to generate the new node (child node) qnew by moving a step size e from qnearest towards qrand.
         # If this path is collision-free, then qnew is added is added to V, and (qnearest,qnew) is added to E.
 
+def random_angle():
+    """ Returns a random angle in radians between 0 and 2pi"""
+    return 2 * math.pi * random.random()
+
+
+def valid_configuration(a1, a2, a3, a4, a5, a6):
+    """ Returns true if the given angle configuration is a valid one.
+
+    Args:
+        a1 the first dof angle value in radians
+        a2 the second dof angle value in radians
+        a3 the third dof angle value in radians
+        a4 the fourth dof angle value in radians
+        a5 the fifth dof angle value in radians
+        a6 the sixth dof angle value in radians
+
+    Returns:
+        true if the given angle configuration is not a self-collision
+        false if the given angle configuration is a self-collision
+
+    """
+    #  for a given a1, an a2 is always valid. However, the a3 is not necessarily valid:
+    #  use spherical coordinates for validity
+    if self.l1 * math.cos(math.radians(a2)) < 0:
+        return False, None
+    if self.l2 * math.cos(math.radians(a3)) + self.l1 * math.cos(math.radians(a2)) < 0:
+        return False, None
+    return True, [(a1 + 360) % self.j1, (a2 + 360) % self.j2, \
+           (a3 + 360) % self.j3, (a4 + 360) % self.j4, \
+           (a5 + 360) % self.j5, (a6 + 360) % self.j6]
+
+
 def oc_sample_config(angles):
     """ Generates a random node uniformly on the constraint manifold.
     Args:
-        angles: The euler angles.
-
+        angles: The euler constraint angles.
     """
+    while(True):
+        qrand = [random_angle() for i in range(6)]
+        if valid_configuration(qrand[0], qrand[1], qrand[2], qrand[3], qrand[4], qrand[5]):
+            return 
     # Loops until IK is solved successfully (qrand meets the restrictive requirements of joint angles range and avoiding
     # singularity)
         # Get a random state by repeatedly sampling new random states of the main arm angles
