@@ -5,24 +5,110 @@ author: Nathan Sprague and ...
 
 """
 import numpy as np
-from spatial_map import SpatialMap
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import axes3d
+import sys
+import random
+import math
+
 
 class RRTNode(object):
-    """ RRT Tree node. """
-    def __init__(self, parent, u, x):
-        """ Constructor.
-        Arguments:
-            parent - Parent node in the tree.
-            u      - control signal that moves from the parents state to x.
-            x      - state associated with this node.
+    """
+    Class to configure the robot precise arm arm.
+    There's a point for each joint and one for each of the arm's ends.
+    The starting point is set at (0,0,0) and does not change.
+    INSTANCE ATTRIBUTES:
+    n_links      [int]      : degrees of freedom.
+    link_lengths [np array] : lengths of each link between joints.
+                              len(link_lengths) == n_links.
+    yaws         [np array] : yaw angles of joints w.r.t. previous joint.
+                              yaw is the counterclockwise angle on the xy plane
+                              a.k.a. theta in spherical coordinates.
+                              len(yaws) == n_links.
+    pitches      [np array] : pitch angles of joints w.r.t. previous joint.
+                              pitch is the clockwise angle on the yz plane
+                              a.k.a. psi in spherical coordinates.
+                              len(pitches) == n_links.
+    points       [list]     : coordinates of joints and arm ends.
+                              len(points) == n_links + 1.
+    """
+
+    def __init__(self, parent):
+        """
+        Initialize a configuration of a robot arm with [dof] degrees of freedom.
         """
         self.parent = parent
-        self.u = u
-        self.x = x
+        self.n_links = 2
+        self.dof = 6
+        self.link_lengths = np.array([2 for _ in range(dof)])
+        self.yaws = np.array([0. for _ in range(self.n_links)])
+        self.pitches = np.array([0. for _ in range(dof)])
+        # may need angles for end effector, but by OC-RRT may not be necessary
+        self.points = np.array([[0., 0., 0.] for _ in range(self.n_links + 1)])
+        self.update_points()
 
-    def __repr__(self):
-        """ String representation for debugging purposes. """
-        return "<u: {}, x: {}>".format(self.u, self.x)
+    def update_yaw(self, yaws):
+        """
+        Redefine the yaw angles.
+        KEYWORD ARGUMENTS:
+        yaws [np array] : new yaw angles for each joint.
+        PRECONDITIONS:
+        len(yaws) == self.n_links.
+        """
+        self.yaws = np.array(yaws)
+        self.update_points()
+
+    def update_pitch(self, pitches):
+        """
+        Redefine the pitch angles.
+        KEYWORD ARGUMENTS:
+        pitches [np array] : new pitch angles for each joint.
+        PRECONDITIONS:
+        len(pitches) == self.n_links.
+        """
+        self.pitches = np.array(pitches)
+        self.update_points()
+
+    def update_points(self):
+        """
+        Redefine the points according to yaw and pitch angles.
+        """
+        for i in range(1, self.n_links + 1):
+            yaw = np.sum(self.yaws[i-1])
+            pitch = np.sum(self.pitches[i-1])
+            r = self.link_lengths[i - 1]
+            hyp = r * np.sin(pitch)  # projection of vector on the xy plane
+            self.points[i][0] = self.points[i - 1][0] + hyp * np.cos(yaw)
+            self.points[i][1] = self.points[i - 1][1] + hyp * np.sin(yaw)
+            self.points[i][2] = self.points[i - 1][2] + np.cos(pitch)
+
+    def get_points(self):
+        """
+        Return the coordinates of the arm's joints and ends.
+        RETURNS: np array
+        """
+        return self.points
+
+    def get_yaws(self):
+        """
+        Return the arm's yaw angles.
+        RETURNS: np array
+        """
+        return self.yaws
+
+    def get_pitches(self):
+        """
+        Return the arm's pitch angles.
+        RETURNS: np array
+        """
+        return self.pitches
+
+    def get_dof(self):
+        """
+        Return the degrees of freedom.
+        RETURNS: int
+        """
+        return self.n_links
 
 
 class Tree:
@@ -151,6 +237,7 @@ def oc_rrt(V, E):
         # Attempt to generate the new node (child node) qnew by moving a step size e from qnearest towards qrand.
         # If this path is collision-free, then qnew is added is added to V, and (qnearest,qnew) is added to E.
 
+
 def nearest(t, qrand):
     """ Select the nearest node (parent node) from all nodes on T.
 
@@ -158,12 +245,47 @@ def nearest(t, qrand):
         t: Tuple of all
     """
 
+def random_angle():
+    """ Returns a random angle in radians between 0 and 2pi"""
+    return 2 * math.pi * random.random()
+
+
+def valid_configuration(a1, a2, a3, a4, a5, a6):
+    """ Returns true if the given angle configuration is a valid one.
+
+    Args:
+        a1 the first dof angle value in radians
+        a2 the second dof angle value in radians
+        a3 the third dof angle value in radians
+        a4 the fourth dof angle value in radians
+        a5 the fifth dof angle value in radians
+        a6 the sixth dof angle value in radians
+
+    Returns:
+        true if the given angle configuration is not a self-collision
+        false if the given angle configuration is a self-collision
+
+    """
+    #  for a given a1, an a2 is always valid. However, the a3 is not necessarily valid:
+    #  use spherical coordinates for validity
+    if self.l1 * math.cos(math.radians(a2)) < 0:
+        return False, None
+    if self.l2 * math.cos(math.radians(a3)) + self.l1 * math.cos(math.radians(a2)) < 0:
+        return False, None
+    return True, [(a1 + 360) % self.j1, (a2 + 360) % self.j2, \
+           (a3 + 360) % self.j3, (a4 + 360) % self.j4, \
+           (a5 + 360) % self.j5, (a6 + 360) % self.j6]
+
+
 def oc_sample_config(angles):
     """ Generates a random node uniformly on the constraint manifold.
     Args:
-        angles: The Euler angles.
-
+        angles: The euler constraint angles.
     """
+    while(True):
+        qrand = [random_angle() for i in range(6)]
+        if valid_configuration(qrand[0], qrand[1], qrand[2], qrand[3], qrand[4], qrand[5]):
+            return 
     # Loops until IK is solved successfully (qrand meets the restrictive requirements of joint angles range and avoiding
     # singularity)
         # Get a random state by repeatedly sampling new random states of the main arm angles
@@ -191,4 +313,4 @@ def oc_steer(qnear, qrand, angles):
 
 if __name__=="__main__":
     test_simple_rrt()
-   
+
