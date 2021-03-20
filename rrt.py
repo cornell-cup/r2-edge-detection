@@ -5,7 +5,6 @@ author: Nathan Sprague and ...
 
 """
 import numpy as np
-import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import axes3d
 import sys
