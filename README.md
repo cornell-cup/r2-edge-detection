@@ -1,6 +1,7 @@
 # Testing Instructions
 ## Install
 To make sure you have all the required packages, you should create a virtual environment, activate it, and run
+
 `pip install -r requirements.txt`
 (there might be more packages in there than necessary, and it might not have
 packages for files like kinematics.py, oops)
@@ -9,6 +10,7 @@ packages for files like kinematics.py, oops)
 Samples - contains testing images for 10 objects, each with 5 poses, from the
 JACQUARD dataset. The 10 subdirectories corresponds to the images for one
 object. 
+
 grasptest.py - contains the testing code that uses final.py's grab_points()
 grasp prediction function.
 
@@ -19,12 +21,14 @@ For each image, the code should display
 - What the RGB version of the image looked like after edge detection, along with
 grasp points (in pink)
 - What the original RGB image looked like, with grasp points
+
 Upon closing the two display windows,
 - What the labels from JACQUARD were (orange for grasp points, yellow for grasp
   rectangle)
 - And the calculated grasp prediction. (The pink dots are the grasp
   points and the green rectangle represents the grasp rect with different sized
   end effectors)
+  
 After closing that window,
 - the image name and the mode [0 for "rgb", 1 for "d", 2 for "rgd"] will be
   printed, along with the automated validation result (which most of the time is
