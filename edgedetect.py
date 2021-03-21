@@ -3,7 +3,7 @@ import time
 from builtins import int, len, range, list, float, sorted, max, min
 # import matplotlib.pyplot as plt
 import numpy as np
-#  from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw
 import sys
 import cv2
 import imutils
@@ -14,6 +14,8 @@ import imutils
 #  takes in input in the form of two corners of the bounding box
 #  across a diagonal from each other.
 #  returns a list of ints in the form of (x, y) of the midpoint
+
+
 def midpoint(x1, y1, x2, y2):
     return [int((x2 - x1)/2), int((y2 + y1)/2)]
 
@@ -23,6 +25,7 @@ def midpoint(x1, y1, x2, y2):
 #  returns the image but cropped to the bounding boxes
 def crop(x1, y1, x2, y2, image):
     return image.crop((x1, y1, x2, y2))
+
 
 def auto_canny(image, sigma=0.33):
     # compute the median of the single channel pixel intensities
@@ -60,15 +63,15 @@ def canny_edge(image_file, width, height):
 
     l, a, b = cv2.split(blurred)
 
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
     cl = clahe.apply(l)
     # cv2.imshow('CLAHE output', cl)
 
-    #-----Merge the CLAHE enhanced L-channel with the a and b channel-----------
-    limg = cv2.merge((cl,a,b))
+    # -----Merge the CLAHE enhanced L-channel with the a and b channel-----------
+    limg = cv2.merge((cl, a, b))
     # cv2.imshow('limg', limg)
 
-    #-----Converting image from LAB Color model to RGB model--------------------
+    # -----Converting image from LAB Color model to RGB model--------------------
     final = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
 
     # cv2.imshow('final', final)
@@ -80,7 +83,7 @@ def canny_edge(image_file, width, height):
     # cv2.waitKey(0)
     cnts = cv2.findContours(x, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     cnts = imutils.grab_contours(cnts)
-    cnts = sorted(cnts, key = cv2.contourArea, reverse = True) [:10]
+    cnts = sorted(cnts, key=cv2.contourArea, reverse=True)[:10]
     k = np.zeros(shape=[height, width, 3], dtype=np.uint8)
     # print("Contours: ", cnts)
     cv2.drawContours(k, [cnts[0]], -1, (255, 255, 255), 1)
@@ -91,10 +94,13 @@ def canny_edge(image_file, width, height):
     cY = int(M["m01"] / M["m00"])
     return k, [cX, cY]
 
+
 def distance(x1, y1, x2, y2):
     return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 #  uses the canny edge image and the midpoint to determine the two points
 #  that the robot arm needs to grab
+
+
 def shortest_path(edge, mid_contour, w, h):
     pix_val = []
     half_cols = w//2
@@ -116,8 +122,10 @@ def shortest_path(edge, mid_contour, w, h):
         col, row = coor[0], coor[1]
         theta = math.atan2((mid_contour[0] - col), (mid_contour[1] - row))
         for radius in range(int(min(total_rows, total_cols)/2)):
-            new_col = min(mid_contour[0] + math.sin(theta)*radius, total_cols-1)
-            new_row = min(mid_contour[1] + math.cos(theta)*radius, total_rows-1)
+            new_col = min(mid_contour[0] +
+                          math.sin(theta)*radius, total_cols-1)
+            new_row = min(mid_contour[1] +
+                          math.cos(theta)*radius, total_rows-1)
             # print((new_col, new_row))
             g = edge[int(new_row)][int(new_col)][1]
             if g == 255:
@@ -131,7 +139,8 @@ def shortest_path(edge, mid_contour, w, h):
 
     cv2.circle(edge, (int(val_x1), int(val_y1)), 5, (255, 0, 255), -1)
     cv2.circle(edge, (int(val_x2), int(val_y2)), 5, (255, 0, 255), -1)
-    cv2.circle(edge, (int(mid_contour[0]), int(mid_contour[1])), 5, (255, 0, 255), -1)
+    cv2.circle(edge, (int(mid_contour[0]), int(
+        mid_contour[1])), 5, (255, 0, 255), -1)
 
     cv2.imshow("points", edge)
     cv2.waitKey(0)
@@ -142,12 +151,11 @@ def shortest_path(edge, mid_contour, w, h):
 #  assumes sys.argv[1] (first argument after the python script call)
 #  is a filename; otherwise has a default file
 def main():
-    image_file = "image.png"
+    image_file = "IMG_1120.jpg"
     if len(sys.argv) > 1:
         image_file = sys.argv[1]
     with Image.open(image_file) as image:
         width, height = image.size
-
 
     #  TODO: Write code with the object detection script to return bounding box coordinates
     #   for now, just assume that the bounding box is the whole image, and no cropping is necessary.
