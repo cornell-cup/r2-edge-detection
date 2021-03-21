@@ -162,6 +162,8 @@ def main():
     original_img = Image.open(sys.argv[1])
     print(type(original_img))
     opencvimage = cv2.cvtColor(np.array(original_img), cv2.COLOR_RGB2BGR)
+    cv2.imshow("original image", opencvimage)
+    cv2.waitKey(0)
     ceRet = canny_edge(opencvimage, width, height)
     edge_image = ceRet[0]
     cv2.imshow("edges", edge_image)
@@ -173,6 +175,12 @@ def main():
     #  edge_image.show()
 
     mid = midpoint(0, 0, width, height)
+    to_file =  str(ceRet[1][0]/1000) + " " + str(ceRet[1][1]/1000) + " 0"
+
+    with open('/Volumes/alison\'s home/c1c0_arm/coordinates.txt', 'w+') as f:
+        f.write(to_file)
+        f.close()
+    print("Midpoint: ", to_file)
     print(shortest_path(edge_image, ceRet[1], width, height))
     cv2.destroyAllWindows()
 

@@ -3,6 +3,9 @@
 import math
 import sys
 import kinematics
+import sys
+import visualization
+import signal
 
 #  an ArmSixDOF object is a representation of the precision arm with six degrees of freedom.
 #  Requires: 2 arm lengths (valid floats) and 5 joint constraints (valid float degrees).
@@ -48,9 +51,9 @@ class ArmSixDOF():
             return False, None
         if self.l2 * math.cos(math.radians(a3)) + self.l1 * math.cos(math.radians(a2)) < 0:
             return False, None
-        return True, (a1 + 360) % self.j1, (a2 + 360) % self.j2, \
+        return True, [(a1 + 360) % self.j1, (a2 + 360) % self.j2, \
                (a3 + 360) % self.j3, (a4 + 360) % self.j4, \
-               (a5 + 360) % self.j5, (a6 + 360) % self.j6
+               (a5 + 360) % self.j5, (a6 + 360) % self.j6]
 
     def point_in_space(self, a1, a2, a3, a4, a5, a6):
         v_config = self.valid_configuration(a1, a2, a3, a4, a5, a6)
@@ -70,15 +73,22 @@ def run_km(x, y, z):
 
 
 def in_range(x, y, z):
-    return math.sqrt(x*x + y*y + z*z) > 0.522
+    return math.sqrt(x*x + y*y + z*z) < 0.522
 
 
 def constraints(a1, a2, a3, a4, a5, a6, x, y, z):
     arm = ArmSixDOF(upper_arm, fore_arm, angle_c, angle_c, angle_c, angle_c, angle_c, angle_c)
+    if z < 0:
+        print("point in obstacle")
+        sys.exit(0)
+    if not in_range(x, y, z):
+        print("not in range")
+        sys.exit(0)
     angles = run_km(x, y, z)
     angles.append(0.0)
     config = arm.valid_configuration(angles[0], angles[1], angles[2], angles[3], angles[4], angles[5])
     if config[0]:
+        print("YES", config[1])
         return config[1]
     else:
         points = [(1, (x - .15, y, z)), (2, (x, y - .15, z)), (3, (x, y, z - .15)),
@@ -104,7 +114,32 @@ def constraints(a1, a2, a3, a4, a5, a6, x, y, z):
                 points.append((5, (x, y + .15, z)))
             elif pair[0] == 6:
                 points.append((6, (x, y, z + .15)))
-
+#
+x = float(sys.argv[1])
+y = float(sys.argv[2])
+z = float(sys.argv[3])
+# example 0, 0, 0.438
 
 # later on, need to input initial angles, or the first 6 inputs, plus the 3 inputs of the coordinates to get to
-constraints(0, 0, 0, 0, 0, 0, 0, 0, 0.438)
+#
+def handler(signum, frame):
+    raise Exception("end of time")
+
+# for i in range(0, 20):
+#     for j in range(0, 20):
+#         for k in range(0, 20):
+#             signal.signal(signal.SIGALRM, handler)
+#             signal.alarm(20)
+#             try:
+#                 angles = run_km(i/10, j/10, k/10)
+#                 print(i/10, j/10, k/10, "OK")
+#             except Exception as exc:
+#                 print(i/10, j/10, k/10, "timed out")
+
+
+
+for i in range(1, 5):
+    angles = run_km(x/4*i, y/4*i, z/4*i)
+    print(110+i)
+    visualization.show(math.radians(angles[1]), math.radians(angles[0]), math.radians(angles[3]), math.radians(angles[2]), x, y, z)
+visualization.show_plot()
