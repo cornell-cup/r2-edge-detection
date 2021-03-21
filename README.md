@@ -15,6 +15,9 @@ grasptest.py - contains the testing code that uses final.py's grab_points()
 grasp prediction function.
 
 ## How to test:
+
+Go to final.py and find where it says "Uncomment to see final image/edges/grasping points!". Uncomment the three lines below that.
+
 `python grasptest.py [dir_with_image_files] [take manual input True or False]`
 
 For each image, the code should display
