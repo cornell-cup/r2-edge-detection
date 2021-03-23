@@ -117,6 +117,10 @@ class RRTNode(object):
         """
         return self.n_links
 
+    def distance_to(self, node2):
+        # Is self.points[self.n_links] the coordinates of the end effector?
+        return math.dist(self.points[self.n_links], node2.points[self.n_links])
+
 
 class Tree:
     """ Rapidly exploring rapid tree data structure. """
@@ -128,12 +132,12 @@ class Tree:
         self.sm.add(q_init, self.root)
         self.nodes = []
         self.edges = []
-        self.t = (nodes, edges)
+        self.t = (self.nodes, self.edges)
 
     def add_node(self, q_new):
         node = RRTNode(None, None, q_new)
         # return self.sm.add(q_new, node)
-        return t[0].add(node)
+        return self.t[0].add(node)
 
     def add_edge(self, q_near, q_new, u):
         # new_node = self.sm.get_value(q_new)
@@ -142,7 +146,7 @@ class Tree:
         # assert np.array_equal(near_node.x, q_near)
         # new_node.parent = near_node
         # new_node.u = u
-        return t[1].add((q_near, q_new))
+        return self.t[1].add((q_near, q_new))
 
     def num_nodes(self):
         return self.sm.num_values
@@ -201,6 +205,7 @@ def rrt(problem, q_init, q_goal, tolerance, max_tree_size=float('inf')):
     #UNFINISHED!
     pass
 
+
 def draw_tree(rrt):
     """ Draw a full RRT using matplotlib. """
     import matplotlib.pyplot as plt
@@ -209,6 +214,7 @@ def draw_tree(rrt):
             plt.plot([node.parent.x[0], node.x[0]],
                      [node.parent.x[1], node.x[1]],
                      'r.-')
+
 
 def test_simple_rrt():
     """ Demo the rrt algorithm on a simple 2d search task. """
@@ -226,13 +232,12 @@ def test_simple_rrt():
     plt.show()
 
 
-def oc_rrt(V, E):
+def oc_rrt(t):
     """ Constructs an orientation-constrained rapidly exploring random tree (OC-RRT). Searches the constraint manifold for a
     feasible path by growing a space-filling tree T.
 
     Args:
-        V: Set of nodes. Initially contains the start node qinit.
-        E: Set of edges. Initially is empty.
+        t: Contains the set of nodes and the set of edges.
 
     Returns:
         Tuple (V, E)
@@ -240,10 +245,14 @@ def oc_rrt(V, E):
     """
 
     # For i in n, where n is the degrees of freedom (?):
-        # Generate qrand with oc_sample_config()
-        # Select the nearest node (parent node) qnearest from all the nodes on T
-        # Attempt to generate the new node (child node) qnew by moving a step size e from qnearest towards qrand.
-        # If this path is collision-free, then qnew is added is added to V, and (qnearest,qnew) is added to E.
+    # Generate qrand with oc_sample_config()
+    qrand = oc_sample_config()
+    # Select the nearest node (parent node) qnearest from all the nodes on Tr
+    qnearest = t.nearest(qrand)
+    # Attempt to generate the new node (child node) qnew by moving a step size e from qnearest towards qrand.
+
+    # If this path is collision-free, then qnew is added is added to V, and (qnearest,qnew) is added to E.
+
 
 
 def nearest(t, qrand):
@@ -300,23 +309,42 @@ def oc_sample_config(angles):
         # Tries to calculate wrist angles for given Euler angles
     # Return a tuple containing these two values
 
-def oc_steer(qnear, qrand, angles):
+
+def oc_steer(qnearest, qrand, angles):
     """ Attempts to generate the new node (child node) qnew by moving a step size e from qnearest toward qrand.
 
     Args:
-        qnear: The nearest node.
+        qnearest: The nearest node.
         qrand: The node randomly generated on the constraint manifold by oc_sample_config().
         angles: The Euler angles.
 
     """
     # Loops until IK is solved successfully (qnew meets the restrictive requirements of joint angles range and avoiding
     # singularity)
-        # Generates a new node by moving a small amount in the straight line from the nearest node qnearest to the
-            # randomly sampled node qrand
-        # Tries to calculate wrist angles for given Euler angles
+    # Generates a new node by moving a small amount in the straight line from the nearest node qnearest to the
+    # randomly sampled node qrand
+    new = steer(qnearest, qrand)
+    # Tries to calculate wrist angles for given Euler angles
     # Return a tuple containing these two values
+    return new
 
 
+def steer(qnearest, qrand):
+    """ Generate the new node (child node) qnew by moving a step size e from qnearest toward qrand, without checking
+    for constraints.
+
+    Args:
+        qnearest: The nearest node.
+        qrand: The node randomly generated on the constraint manifold by oc_sample_config().
+        angles: The Euler angles.
+
+    """
+
+    dist = math.dist(qrand, qnearest)
+    new = np.subtract(qrand.get_points()[-1], qnearest.get_points()[-1])
+    new = new * (Tree.epsilon / dist)
+    
+    return new
 
 
 if __name__=="__main__":
