@@ -41,13 +41,13 @@ class RRTNode(object):
                               len(points) == n_links + 1.
     """
 
-    def __init__(self, configuration):
+    def __init__(self, configuration, link_lengths):
         """
         Initialize a configuration of a robot arm with [dof] degrees of freedom.
         """
-        self.n_links = 2
+        self.n_links = len(link_lengths)
         self.dof = 6
-        self.link_lengths = np.array([2 for _ in range(dof)])
+        self.link_lengths = link_lengths
         self.yaws = np.array([0. for _ in range(self.n_links)])
         self.pitches = np.array([0. for _ in range(dof)])
         # may need angles for end effector, but by OC-RRT may not be necessary
@@ -125,10 +125,11 @@ class RRTNode(object):
 class Tree:
     """ Rapidly exploring rapid tree data structure. """
     
-    def __init__(self, q_init):
+    def __init__(self, q_init, link_lengths):
         """ q_init - root, d-dimensional numpy array """
         self.sm = SpatialMap(dim=q_init.size)
-        self.root = RRTNode(None, None, q_init)
+        self.root = RRTNode(None, link_lengths)
+        self.link_lengths = link_lengths
         self.sm.add(q_init, self.root)
         self.nodes = []
         self.edges = []
@@ -153,83 +154,6 @@ class Tree:
 
     def __iter__(self):
         return self.sm.__iter__()
-
-
-class RRTStraightLines(object):
-    """RRT problem class for searching in straight line steps directly
-        toward intermediate target locations.  All searching happens
-        within the unit square.
-
-    """
-
-    def __init__(self, step_size=.03):
-        self.step_size = step_size
-
-    def random_state(self):
-        return np.random.random((2,))
-
-    def select_input(self, q_rand, q_near):
-        u = q_rand - q_near
-        length = np.linalg.norm(u)
-        if length > self.step_size:
-            u = u / length * self.step_size
-        return u
-
-    def new_state(self, q_near, u):
-        return q_near + u
-
-
-def rrt(problem, q_init, q_goal, tolerance, max_tree_size=float('inf')):
-    """ Path search using RRT.
-
-    Args:
-        problem:   a problem instance that provides three methods:
-
-            problem.random_state() -
-               Return a randomly generated configuration
-            problem.select_input(q_rand, q_near) -
-               Return an action that would move the robot from
-               q_near in the direction of q_rand
-            problem.new_state(q_near, u) -
-               Return the state that would result from taking
-               action u in state q_near
-
-        q_init:         the initial state
-        q_goal:         the goal state
-        tolerance:      how close the path needs to get to the goal.
-        max_tree_size:  the maxmimum number of nodes to add to the tree
-    Returns:
-       (path, tree) tuple
-
-    """
-    #UNFINISHED!
-    pass
-
-
-def draw_tree(rrt):
-    """ Draw a full RRT using matplotlib. """
-    import matplotlib.pyplot as plt
-    for node in rrt.sm:
-        if node.parent is not None:
-            plt.plot([node.parent.x[0], node.x[0]],
-                     [node.parent.x[1], node.x[1]],
-                     'r.-')
-
-
-def test_simple_rrt():
-    """ Demo the rrt algorithm on a simple 2d search task. """
-    import matplotlib.pyplot as plt
-    x_start = np.array([.5, .5])
-    x_goal = np.array([.9, .9])
-    lines = RRTStraightLines(.03)
-    path, tree = rrt(lines, x_start, x_goal, .03)
-    print(path)
-    result = np.zeros((len(path), 2))
-    for i in range(len(path)):
-        result[i, :] = path[i].x
-    draw_tree(tree)
-    plt.plot(result[:, 0], result[:, 1], '.-')
-    plt.show()
 
 
 def oc_rrt(t):
@@ -267,7 +191,7 @@ def random_angle():
     return 2 * math.pi * random.random()
 
 
-def valid_configuration(a1, a2, a3, a4, a5, a6):
+def valid_configuration(a1, a2, a3, a4, a5, a6, tree):
     """ Returns true if the given angle configuration is a valid one.
 
     Args:
@@ -277,6 +201,7 @@ def valid_configuration(a1, a2, a3, a4, a5, a6):
         a4 the fourth dof angle value in radians
         a5 the fifth dof angle value in radians
         a6 the sixth dof angle value in radians
+        tree the RRT data structure
 
     Returns:
         true if the given angle configuration is not a self-collision
@@ -285,13 +210,13 @@ def valid_configuration(a1, a2, a3, a4, a5, a6):
     """
     #  for a given a1, an a2 is always valid. However, the a3 is not necessarily valid:
     #  use spherical coordinates for validity
-    if self.l1 * math.cos(math.radians(a2)) < 0:
+    if tree.link_lengths[0] * math.cos(math.radians(a2)) < 0:
         return False, None
-    if self.l2 * math.cos(math.radians(a3)) + self.l1 * math.cos(math.radians(a2)) < 0:
+    if tree.link_lengths[1] * math.cos(math.radians(a3)) + tree.link_lengths[0] * math.cos(math.radians(a2)) < 0:
         return False, None
-    return True, [(a1 + 360) % self.j1, (a2 + 360) % self.j2, \
-           (a3 + 360) % self.j3, (a4 + 360) % self.j4, \
-           (a5 + 360) % self.j5, (a6 + 360) % self.j6]
+    return True, [(a1 + 360) % 360, (a2 + 360) % 360, \
+           (a3 + 360) % 360, (a4 + 360) % 360, \
+           (a5 + 360) % 360, (a6 + 360) % 360]
 
 
 def oc_sample_config(angles):
