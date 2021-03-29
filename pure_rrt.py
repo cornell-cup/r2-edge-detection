@@ -1,17 +1,17 @@
-'''
+"""
 MIT License
 Copyright (c) 2019 Fanjin Zeng
 This work is licensed under the terms of the MIT license, see <https://opensource.org/licenses/MIT>.
-'''
+"""
+import math
 
 import numpy as np
 from random import random
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
-from matplotlib import collections  as mc
+from matplotlib import collections as mc
 from collections import deque
 from mpl_toolkits.mplot3d import art3d
-
 
 class Line:
     def __init__(self, p0, p1):
@@ -24,7 +24,7 @@ class Line:
         return self.p + t * self.dirn
 
 
-def Intersection(line, center, radius):
+def intersection(line, center, radius):
     """ Check line-sphere (circle) intersection """
     a = np.dot(line.dirn, line.dirn)
     b = 2 * np.dot(line.dirn, line.p - center)
@@ -60,7 +60,7 @@ def isThruObstacle(line, obstacles, radius):
             # return True
     return False
 
-
+# TODO: Implement a greedy search to find the approximate nearest neighbor
 def nearest(G, vex, obstacles, radius):
     Nvex = None
     Nidx = None
@@ -107,10 +107,75 @@ def is_in_window(pos, winx, winy, width, height):
     else:
         return False
 
+# problem: a node is only represented by a list [x, y, z]
+# solution: use RRT node from rrt.py?
+# must change all references to a certain node in the RRT algorithm to new RRT node
+
+# for qrand: make angle configurations random, and call forward kinematics on that
+# for qnew: move all angles in step size epsilon towards qrand angles
+
+
+
+class RRTNode(object):
+    """
+    Class to configure the robot precise arm.
+    There's a point for each joint and one for each of the arm's ends.
+    The starting point is set at (0,0,0) and does not change.
+    Args:
+        configuration: list of joint angles in radians. Corresponds to the 6 degrees of freedom on the arm
+        a1-- the lift angle of the base
+        a2-- the pan angle of the base
+        a3-- the lift angle of the elbow
+        a4-- the pan angle of the elbow
+        a5-- the pan angle of the wrist
+        a6-- how big to open the end effector
+    INSTANCE ATTRIBUTES:
+    n_links      [int]      : degrees of freedom.
+    yaws         [np array] : yaw angles of joints w.r.t. previous joint.
+                              yaw is the counterclockwise angle on the xy plane
+                              a.k.a. theta in spherical coordinates.
+                              len(yaws) == n_links.
+    pitches      [np array] : pitch angles of joints w.r.t. previous joint.
+                              pitch is the clockwise angle on the yz plane
+                              a.k.a. psi in spherical coordinates.
+                              len(pitches) == n_links.
+    points       [list]     : coordinates of joints and arm ends.
+                              len(points) == n_links + 1.
+    """
+
+    # Link lengths
+    l1 = 0.066675
+    l2 = 0.104775
+    l3 = 0.0889
+    l4 = 0.1778
+    L = np.array([l1, l2, l3, l4])
+
+    def __init__(self, configuration, link_lengths):
+        """
+        Initialize a configuration of a robot arm with [dof] degrees of freedom.
+        """
+
+        self.n_links = len(link_lengths)
+        self.dof = 6
+        self.link_lengths = link_lengths
+        self.configuration = configuration
+        self.update_points()
+
+
+    def get_dof(self):
+        """
+        Return the degrees of freedom.
+        RETURNS: int
+        """
+        return self.n_links
+
+    def distance_to(self, node2):
+        return math.dist(self.points[self.n_links], node2.points[self.n_links])
 
 class Graph:
     # TODO: add fields for angles of arm
     def __init__(self, startpos, endpos):
+        # Cartesian coordinates
         self.startpos = startpos
         self.endpos = endpos
 
@@ -125,6 +190,8 @@ class Graph:
         self.sx = endpos[0] - startpos[0]
         self.sy = endpos[1] - startpos[1]
         self.sz = endpos[2] - startpos[2]
+
+        # Angles of arm
 
     def add_vex(self, pos):
         try:
@@ -141,7 +208,7 @@ class Graph:
         self.neighbors[idx1].append((idx2, cost))
         self.neighbors[idx2].append((idx1, cost))
 
-    def randomPosition(self):
+    def random_position(self):
         rx = random()
         ry = random()
         rz = random()
@@ -153,10 +220,12 @@ class Graph:
 
 
 def RRT(startpos, endpos, obstacles, n_iter, radius, stepSize):
+    # Insert kinematics to translate start position cartesian coordinates to angles of the arm
+
     G = Graph(startpos, endpos)
 
     for _ in range(n_iter):
-        randvex = G.randomPosition()
+        randvex = G.random_position()
         if isInObstacle(randvex, obstacles, radius):
             continue
 
@@ -184,7 +253,7 @@ def RRT_star(startpos, endpos, obstacles, n_iter, radius, stepSize):
     G = Graph(startpos, endpos)
 
     for _ in range(n_iter):
-        randvex = G.randomPosition()
+        randvex = G.random_position()
         if isInObstacle(randvex, obstacles, radius):
             continue
 
@@ -329,7 +398,7 @@ if __name__ == '__main__':
     startpos = (0., 0., 0.)
     endpos = (5., 5., 5.)
     obstacles = [(1., 1.), (2., 2.)]
-    n_iter = 1000
+    n_iter = 200
     radius = 0.7
     stepSize = 0.7
 
