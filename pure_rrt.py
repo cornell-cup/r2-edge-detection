@@ -12,6 +12,7 @@ from mpl_toolkits import mplot3d
 from matplotlib import collections as mc
 from collections import deque
 from mpl_toolkits.mplot3d import art3d
+import time
 
 class Line:
     def __init__(self, p0, p1):
@@ -46,6 +47,7 @@ def intersection(line, center, radius):
 def distance(x, y):
     return np.linalg.norm(np.array(x) - np.array(y))
 
+
 # TODO: Modify the below methods to work with manifolds representing obstacles
 def isInObstacle(vex, obstacles, radius):
     # for obs in obstacles:
@@ -59,6 +61,7 @@ def isThruObstacle(line, obstacles, radius):
         # if Intersection(line, obs, radius):
             # return True
     return False
+
 
 # TODO: Implement a greedy search to find the approximate nearest neighbor
 def nearest(G, vex, obstacles, radius):
@@ -78,6 +81,29 @@ def nearest(G, vex, obstacles, radius):
             Nvex = v
 
     return Nvex, Nidx
+
+
+def explorable(contenders, min_dist, min_node, goal_node, step_size):
+    if not contenders:
+        print("No more contenders")
+        return min_node
+    explorable_nodes = []
+    for node in contenders:
+        new_dist = distance(node, goal_node)
+        if new_dist <= min_dist + step_size/2:
+            explorable_nodes.append(node)
+        if new_dist <= min_dist:
+            min_node = node
+            min_dist = distance(node, goal_node)
+    new_contenders = []
+    for exp_node in explorable_nodes:
+        new_contenders += exp_node.children
+    return explorable(new_contenders, min_dist, min_node, goal_node, step_size)
+
+
+def nearest_neighbor(G, vex, obstacles, radius):
+    root = G.startpos
+    return explorable(G.children, float("inf"), None, vex, radius)
 
 
 def new_vertex(randvex, nearvex, stepSize):
@@ -150,7 +176,7 @@ class RRTNode(object):
     l4 = 0.1778
     L = np.array([l1, l2, l3, l4])
 
-    def __init__(self, configuration, link_lengths):
+    def __init__(self, configuration, link_lengths, children):
         """
         Initialize a configuration of a robot arm with [dof] degrees of freedom.
         """
@@ -160,7 +186,7 @@ class RRTNode(object):
         self.link_lengths = link_lengths
         self.configuration = configuration
         self.update_points()
-
+        self.children = children
 
     def get_dof(self):
         """
@@ -171,6 +197,10 @@ class RRTNode(object):
 
     def distance_to(self, node2):
         return math.dist(self.points[self.n_links], node2.points[self.n_links])
+
+    def add_child(self, child):
+        self.children.append(child)
+
 
 class Graph:
     # TODO: add fields for angles of arm
@@ -401,7 +431,7 @@ if __name__ == '__main__':
     n_iter = 200
     radius = 0.7
     stepSize = 0.7
-
+    start_time = time.time()
     # G = RRT_star(startpos, endpos, obstacles, n_iter, radius, stepSize)
     G = RRT(startpos, endpos, obstacles, n_iter, radius, stepSize)
 
@@ -411,3 +441,4 @@ if __name__ == '__main__':
         plot_3d(G, obstacles, radius, path)
     else:
         plot_3d(G, obstacles, radius)
+    print("\nTime taken: ", (time.time()-start_time))
