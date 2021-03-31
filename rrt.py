@@ -14,7 +14,7 @@ import math
 
 class RRTNode(object):
     """
-    Class to configure the robot precise arm arm.
+    Class to configure the robot precise arm.
     There's a point for each joint and one for each of the arm's ends.
     The starting point is set at (0,0,0) and does not change.
     Args:
@@ -49,7 +49,7 @@ class RRTNode(object):
         self.dof = 6
         self.link_lengths = link_lengths
         self.yaws = np.array([0. for _ in range(self.n_links)])
-        self.pitches = np.array([0. for _ in range(dof)])
+        self.pitches = np.array([0. for _ in range(self.dof)])
         # may need angles for end effector, but by OC-RRT may not be necessary
         self.points = np.array([[0., 0., 0.] for _ in range(self.n_links + 1)])
         self.update_points()
@@ -118,7 +118,6 @@ class RRTNode(object):
         return self.n_links
 
     def distance_to(self, node2):
-        # Is self.points[self.n_links] the coordinates of the end effector?
         return math.dist(self.points[self.n_links], node2.points[self.n_links])
 
 
