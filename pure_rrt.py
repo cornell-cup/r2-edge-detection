@@ -12,6 +12,8 @@ from mpl_toolkits import mplot3d
 from matplotlib import collections as mc
 from collections import deque
 from mpl_toolkits.mplot3d import art3d
+from .kinematics import FK
+from .rrt import valid_configuration
 
 class Line:
     def __init__(self, p0, p1):
@@ -81,7 +83,6 @@ def nearest(G, vex, obstacles, radius):
 
 
 def new_vertex(randvex, nearvex, stepSize):
-    # TODO: Ensure that the inv kinematic solution for newvex is a valid configuration and does not hit any obstacles
     dirn = np.array(randvex) - np.array(nearvex)
     length = np.linalg.norm(dirn)
     dirn = (dirn / length) * min(stepSize, length)
@@ -143,12 +144,7 @@ class RRTNode(object):
                               len(points) == n_links + 1.
     """
 
-    # Link lengths
-    l1 = 0.066675
-    l2 = 0.104775
-    l3 = 0.0889
-    l4 = 0.1778
-    L = np.array([l1, l2, l3, l4])
+
 
     def __init__(self, configuration, link_lengths):
         """
@@ -173,6 +169,9 @@ class RRTNode(object):
         return math.dist(self.points[self.n_links], node2.points[self.n_links])
 
 class Graph:
+    # Link lengths
+
+
     # TODO: add fields for angles of arm
     def __init__(self, startpos, endpos):
         # Cartesian coordinates
@@ -191,7 +190,12 @@ class Graph:
         self.sy = endpos[1] - startpos[1]
         self.sz = endpos[2] - startpos[2]
 
-        # Angles of arm
+        # Specifications of arm
+        l1 = 0.066675
+        l2 = 0.104775
+        l3 = 0.0889
+        l4 = 0.1778
+        link_lengths = np.array([l1, l2, l3, l4])
 
     def add_vex(self, pos):
         try:
@@ -217,6 +221,33 @@ class Graph:
         posy = self.startpos[1] - (self.sy / 2.) + ry * self.sy * 2
         posz = self.startpos[2] - (self.sz / 2.) + rz * self.sz * 2
         return posx, posy, posz
+
+
+def random_angle_config():
+    # How to generate random angle configurations within the configuration space?
+    # How to bias the angle configurations towards the goal?
+    while True:
+        a1 = random() * 2 * math.pi
+        a2 = random() * 2 * math.pi
+        a3 = random() * 2 * math.pi
+        a4 = random() * 2 * math.pi
+        a5 = random() * 2 * math.pi
+        a6 = random() * 2 * math.pi
+
+        if valid_configuration(a1, a2, a3, a4, a5, a6, Graph(0,0)):
+            return [a1, a2, a3, a4, a5, a6]
+
+    return []
+
+
+def steer(qrand, qnearest, epsilon):
+    dist = math.dist(qrand, qnearest)
+    new = np.subtract(qrand, qnearest)
+    new = new * (epsilon / dist)
+
+    return new
+
+
 
 
 def RRT(startpos, endpos, obstacles, n_iter, radius, stepSize):
@@ -367,11 +398,15 @@ def plot(G, obstacles, radius, path=None):
     plt.show()
 
 
+# TODO: Function to plot arm configurations
+
 def plot_3d(G, obstacles, radius, path=None):
     ax = plt.axes(projection='3d')
     xdata = [x for x, y, z in G.vertices]
     ydata = [y for x, y, z in G.vertices]
     zdata = [z for x, y, z in G.vertices]
+
+    f = FK([r[0], r[1], r[2]])
 
     lines = [(G.vertices[edge[0]], G.vertices[edge[1]]) for edge in G.edges]
     lc = art3d.Line3DCollection(lines, colors='black', linewidths=1)
@@ -401,6 +436,8 @@ if __name__ == '__main__':
     n_iter = 200
     radius = 0.7
     stepSize = 0.7
+
+
 
     # G = RRT_star(startpos, endpos, obstacles, n_iter, radius, stepSize)
     G = RRT(startpos, endpos, obstacles, n_iter, radius, stepSize)
