@@ -16,7 +16,6 @@ from .kinematics import FK
 from .rrt import valid_configuration
 import time
 
-
 class Line:
     def __init__(self, p0, p1):
         self.p = np.array(p0)
@@ -170,8 +169,6 @@ class RRTNode(object):
     points       [list]     : coordinates of joints and arm ends.
                               len(points) == n_links + 1.
     """
-
-
 
     def __init__(self, configuration, link_lengths, children):
         """
