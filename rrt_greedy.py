@@ -85,27 +85,26 @@ def nearest(G, vex, obstacles, radius):
     return Nvex, Nidx
 
 
-def explorable(contenders, min_dist, min_node, goal_node, step_size):
+def explorable(contenders, min_dist, min_node, goal_node, step_size, has_seen):
     if not contenders:
-        print("No more contenders")
         return min_node
+
     explorable_nodes = []
     for node in contenders:
+        has_seen.append(node)
         new_dist = distance(node, goal_node)
-        if new_dist <= min_dist + step_size/2:
-            explorable_nodes.append(node)
         if new_dist <= min_dist:
+            explorable_nodes.append(node)
             min_node = node
             min_dist = distance(node, goal_node)
-    new_contenders = []
-    for exp_node in explorable_nodes:
-        new_contenders += exp_node.children
-    return explorable(new_contenders, min_dist, min_node, goal_node, step_size)
+
+    new_contenders = [exp_node.neighbors for exp_node in explorable_nodes] - has_seen
+    return explorable(new_contenders, min_dist, min_node, goal_node, step_size, has_seen)
 
 
-def nearest_neighbor(G, vex, obstacles, radius):
+def nearest_greedy(G, vex, obstacles, radius):
     root = G.startpos
-    return explorable(G.children, float("inf"), None, vex, radius)
+    return explorable(G.neighbors, float("inf"), None, vex, radius, [])
 
 
 def new_vertex(randvex, nearvex, stepSize):
@@ -170,15 +169,24 @@ class RRTNode(object):
                               len(points) == n_links + 1.
     """
 
-    def __init__(self, points, children):
+    def __init__(self, configuration, link_lengths, children):
         """
         Initialize a configuration of a robot arm with [dof] degrees of freedom.
         """
-        self.children = children
-        self.points = points
 
-    def get_children(self):
-        return self.children
+        self.n_links = len(link_lengths)
+        self.dof = 6
+        self.link_lengths = link_lengths
+        self.configuration = configuration
+        self.update_points()
+        self.children = children
+
+    def get_dof(self):
+        """
+        Return the degrees of freedom.
+        RETURNS: int
+        """
+        return self.n_links
 
     def distance_to(self, node2):
         return math.dist(self.points[self.n_links], node2.points[self.n_links])
@@ -197,7 +205,7 @@ class Graph:
         self.startpos = startpos
         self.endpos = endpos
 
-        self.vertices = [RRTNode(startpos, [])]
+        self.vertices = [startpos]
         self.edges = []
         self.success = False
 
@@ -230,7 +238,6 @@ class Graph:
         self.edges.append((idx1, idx2))
         self.neighbors[idx1].append((idx2, cost))
         self.neighbors[idx2].append((idx1, cost))
-        self.vertices[idx1].add_child(self.vertices[idx2])
 
     def random_position(self):
         rx = random()
@@ -266,6 +273,8 @@ def steer(qrand, qnearest, epsilon):
     new = new * (epsilon / dist)
 
     return new
+
+
 
 
 def RRT(startpos, endpos, obstacles, n_iter, radius, stepSize):
@@ -306,7 +315,7 @@ def RRT_star(startpos, endpos, obstacles, n_iter, radius, stepSize):
         if isInObstacle(randvex, obstacles, radius):
             continue
 
-        nearvex, nearidx = nearest(G, randvex, obstacles, radius)
+        nearvex, nearidx = nearest_greedy(G, randvex, obstacles, radius)
         if nearvex is None:
             continue
 
@@ -430,7 +439,7 @@ def plot_3d(G, obstacles, radius, path=None):
 
     if path is not None:
         paths = [(path[i], path[i + 1]) for i in range(len(path) - 1)]
-        lc2 = art3d.Line3DCollection(paths, colors='green', linewidths=3)
+        lc2 = art3d.Line3DCollection(paths, colors='red', linewidths=3)
         ax.add_collection(lc2)
 
     ax.scatter3D(xdata, ydata, zdata, c=zdata, cmap='Blues');
@@ -449,9 +458,9 @@ if __name__ == '__main__':
     startpos = (0., 0., 0.)
     endpos = (5., 5., 5.)
     obstacles = [(1., 1.), (2., 2.)]
-    n_iter = 200
-    radius = 0.7
-    stepSize = 0.7
+    n_iter = 800
+    radius = 0.5
+    stepSize = 0.5
 
     start_time = time.time()
     # G = RRT_star(startpos, endpos, obstacles, n_iter, radius, stepSize)
@@ -460,7 +469,9 @@ if __name__ == '__main__':
     if G.success:
         path = dijkstra(G)
         print(path)
+        print("\nTime taken: ", (time.time()-start_time))
         plot_3d(G, obstacles, radius, path)
     else:
         plot_3d(G, obstacles, radius)
-    print("\nTime taken: ", (time.time()-start_time))
+
+
