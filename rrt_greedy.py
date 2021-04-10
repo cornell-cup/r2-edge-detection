@@ -4,6 +4,8 @@ Copyright (c) 2019 Fanjin Zeng
 This work is licensed under the terms of the MIT license, see <https://opensource.org/licenses/MIT>.
 """
 import math
+from builtins import float, min, enumerate, object, len, range, list
+from math import dist
 
 import numpy as np
 from random import random
@@ -13,6 +15,7 @@ from matplotlib import collections as mc
 from collections import deque
 from mpl_toolkits.mplot3d import art3d
 from kinematics import FK
+from spatial_hashing import SpatialHash
 from rrt import valid_configuration
 import time
 
@@ -107,6 +110,25 @@ def nearest_greedy(G, vex, obstacles, radius):
     return explorable(G.neighbors, float("inf"), None, vex, radius, [])
 
 
+def nearest_spatial_hash(S, vex):
+    nearest_node = None
+    min_distance = float("inf")
+    for s in S.contents:
+        # update if one finds a nearest neighbor
+        new_d = dist(s, S.hash(vex))
+        if new_d < min_distance:
+            nearest_node = vex
+            min_distance = new_d
+
+    final_node = None
+    for t in S.contents[nearest_node]:
+        new_d = dist(s, S.hash(vex))
+        if new_d < min_distance:
+            final_node = vex
+            min_distance = new_d
+    return final_node
+
+
 def new_vertex(randvex, nearvex, stepSize):
     dirn = np.array(randvex) - np.array(nearvex)
     length = np.linalg.norm(dirn)
@@ -139,7 +161,6 @@ def is_in_window(pos, winx, winy, width, height):
 
 # for qrand: make angle configurations random, and call forward kinematics on that
 # for qnew: move all angles in step size epsilon towards qrand angles
-
 
 
 class RRTNode(object):
@@ -197,14 +218,12 @@ class RRTNode(object):
 
 class Graph:
     # Link lengths
-
-
     # TODO: add fields for angles of arm
     def __init__(self, startpos, endpos):
         # Cartesian coordinates
         self.startpos = startpos
         self.endpos = endpos
-
+        self.spatial_hash = SpatialHash(0.5)
         self.vertices = [startpos]
         self.edges = []
         self.success = False
@@ -231,6 +250,7 @@ class Graph:
             idx = len(self.vertices)
             self.vertices.append(pos)
             self.vex2idx[pos] = idx
+            self.spatial_hash.insert_object_for_point(pos, pos)
             self.neighbors[idx] = []
         return idx
 
@@ -263,7 +283,6 @@ def random_angle_config():
 
         if valid_configuration(a1, a2, a3, a4, a5, a6, Graph(0,0)):
             return [a1, a2, a3, a4, a5, a6]
-
     return []
 
 
@@ -273,8 +292,6 @@ def steer(qrand, qnearest, epsilon):
     new = new * (epsilon / dist)
 
     return new
-
-
 
 
 def RRT(startpos, endpos, obstacles, n_iter, radius, stepSize):
@@ -315,7 +332,8 @@ def RRT_star(startpos, endpos, obstacles, n_iter, radius, stepSize):
         if isInObstacle(randvex, obstacles, radius):
             continue
 
-        nearvex, nearidx = nearest_greedy(G, randvex, obstacles, radius)
+        # change this line to determine which nearest neighbor algorithm to use!!!
+        nearvex, nearidx = nearest(G, randvex, obstacles, radius)
         if nearvex is None:
             continue
 
@@ -464,14 +482,15 @@ if __name__ == '__main__':
 
     start_time = time.time()
     # G = RRT_star(startpos, endpos, obstacles, n_iter, radius, stepSize)
-    G = RRT(startpos, endpos, obstacles, n_iter, radius, stepSize)
 
-    if G.success:
-        path = dijkstra(G)
-        print(path)
-        print("\nTime taken: ", (time.time()-start_time))
-        plot_3d(G, obstacles, radius, path)
-    else:
-        plot_3d(G, obstacles, radius)
-
+    for i in range(10):
+        G = RRT(startpos, endpos, obstacles, n_iter, radius, stepSize)
+        if G.success:
+            path = dijkstra(G)
+            print(path)
+        #
+        #     plot_3d(G, obstacles, radius, path)
+        # else:
+        #     plot_3d(G, obstacles, radius)
+    print("\nTime taken: ", (time.time()-start_time))
 
