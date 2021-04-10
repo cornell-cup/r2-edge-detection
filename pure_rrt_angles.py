@@ -72,11 +72,11 @@ def nearest(G, vex, obstacles, radius):
     minDist = float("inf")
 
     for idx, v in enumerate(G.vertices):
-        line = Line(v, vex)
+        line = Line(v.end_effector_pos, vex)
         if isThruObstacle(line, obstacles, radius):
             continue
 
-        dist = distance(v, vex)
+        dist = distance(v.end_effector_pos, vex)
         if dist < minDist:
             minDist = dist
             Nidx = idx
@@ -85,13 +85,37 @@ def nearest(G, vex, obstacles, radius):
     return Nvex, Nidx
 
 
+def explorable(contenders, min_dist, min_node, goal_node, step_size):
+    if not contenders:
+        print("No more contenders")
+        return min_node
+    explorable_nodes = []
+    for node in contenders:
+        new_dist = distance(node, goal_node)
+        if new_dist <= min_dist + step_size/2:
+            explorable_nodes.append(node)
+        if new_dist <= min_dist:
+            min_node = node
+            min_dist = distance(node, goal_node)
+    new_contenders = []
+    for exp_node in explorable_nodes:
+        new_contenders += exp_node.children
+    return explorable(new_contenders, min_dist, min_node, goal_node, step_size)
+
+
+def nearest_neighbor(G, vex, obstacles, radius):
+    root = G.startpos
+    return explorable(G.children, float("inf"), None, vex, radius)
+
+
 def new_vertex(randvex, nearvex, stepSize):
     dirn = np.array(randvex) - np.array(nearvex)
     length = np.linalg.norm(dirn)
     dirn = (dirn / length) * min(stepSize, length)
 
-    newvex = (nearvex[0] + dirn[0], nearvex[1] + dirn[1], nearvex[2] + dirn[2])
-    return newvex
+    new_angles = (nearvex[0] + dirn[0], nearvex[1] + dirn[1], nearvex[2] + dirn[2], nearvex[3] + dirn[3],
+              nearvex[4] + dirn[4], nearvex[5] + dirn[5])
+    return RRTNode(new_angles)
 
 
 def window(startpos, endpos):
@@ -117,74 +141,59 @@ def is_in_window(pos, winx, winy, width, height):
 
 # for qrand: make angle configurations random, and call forward kinematics on that
 # for qnew: move all angles in step size epsilon towards qrand angles
-
+# Specifications of arm
+l1 = 0.066675
+l2 = 0.104775
+l3 = 0.0889
+l4 = 0.1778
+link_lengths = np.array([l1, l2, l3, l4])
 
 class RRTNode(object):
     """
-    Class to configure the robot precise arm.
-    There's a point for each joint and one for each of the arm's ends.
-    The starting point is set at (0,0,0) and does not change.
+    Representation of a node generated in a RRT graph.
+
     Args:
-        configuration: list of joint angles in radians. Corresponds to the 6 degrees of freedom on the arm
-        a1-- the lift angle of the base
-        a2-- the pan angle of the base
-        a3-- the lift angle of the elbow
-        a4-- the pan angle of the elbow
-        a5-- the pan angle of the wrist
-        a6-- how big to open the end effector
-    INSTANCE ATTRIBUTES:
-    n_links      [int]      : degrees of freedom.
-    yaws         [np array] : yaw angles of joints w.r.t. previous joint.
-                              yaw is the counterclockwise angle on the xy plane
-                              a.k.a. theta in spherical coordinates.
-                              len(yaws) == n_links.
-    pitches      [np array] : pitch angles of joints w.r.t. previous joint.
-                              pitch is the clockwise angle on the yz plane
-                              a.k.a. psi in spherical coordinates.
-                              len(pitches) == n_links.
-    points       [list]     : coordinates of joints and arm ends.
-                              len(points) == n_links + 1.
+        configuration: list of joint angles in radians. Corresponds to the 6 degrees of freedom on the arm.
+            a1-- the lift angle of the base
+            a2-- the pan angle of the base
+            a3-- the lift angle of the elbow
+            a4-- the pan angle of the elbow
+            a5-- the pan angle of the wrist
+            a6-- how big to open the end effector
+        neighbors: list of nodes with an edge going to this node.
+
+    Instance Attributes:
+        end_effector_pos [np array] : [x, y, z] of the end effector.
+        angles           [np array] : list of joint angles in radians. [a1 ... a6].
+        neighbors        [array]    : list of nodes with an edge going to this node.
     """
 
-    def __init__(self, configuration, link_lengths, children):
-        """
-        Initialize a configuration of a robot arm with [dof] degrees of freedom.
-        """
+    def __init__(self, configuration):
+        self.angles = configuration
+        self.end_effector_pos = self.forward_kinematics()
 
-        self.n_links = len(link_lengths)
-        self.dof = 6
-        self.link_lengths = link_lengths
-        self.configuration = configuration
-        self.update_points()
-        self.children = children
-
-    def get_dof(self):
-        """
-        Return the degrees of freedom.
-        RETURNS: int
-        """
-        return self.n_links
-
-    def distance_to(self, node2):
-        return math.dist(self.points[self.n_links], node2.points[self.n_links])
-
-    def add_child(self, child):
-        self.children.append(child)
+    def forward_kinematics(self):
+        angles = np.array([[0], [self.angles[0]], [0], [self.angles[1]], [0]])
+        alpha = np.array([[self.angles[2]], [0], [0], [self.angles[3]], [0]])
+        r = np.array([[0], [link_lengths[1]], [link_lengths[2]], [0], [0]])
+        d = np.array([[link_lengths[0]], [0], [0], [0], [link_lengths[3]]])
+        return FK(angles, alpha, r, d)
 
 
 class Graph:
     # Link lengths
-    # TODO: add fields for angles of arm
-    def __init__(self, startpos, endpos):
-        # Cartesian coordinates
-        self.startpos = (startpos)
-        self.endpos = endpos
 
-        self.vertices = [startpos]
+    # possibly only need cartesian coordinates for plotting?
+    def __init__(self, start_angles, end_angles):
+        # Cartesian coordinates
+        self.startpos = RRTNode(start_angles)
+        self.endpos = RRTNode(end_angles)
+
+        self.vertices = [self.startpos]
         self.edges = []
         self.success = False
 
-        # self.vex2idx = {startpos: 0}
+        self.vex2idx = {self.startpos: 0}
         self.neighbors = {0: []}
         self.distances = {0: 0.}
 
@@ -199,14 +208,15 @@ class Graph:
         l4 = 0.1778
         self.link_lengths = np.array([l1, l2, l3, l4])
 
-    def add_vex(self, pos):
-        # try:
-        #     idx = self.vex2idx[pos]
-        # except:
-        idx = len(self.vertices)
-        self.vertices.append(pos)
-        # self.vex2idx[pos] = idx
-        self.neighbors[idx] = []
+    def add_vex(self, node):
+        # make another data structure for cartesian coordinates
+        try:
+            idx = self.vex2idx[node]
+        except:
+            idx = len(self.vertices)
+            self.vertices.append(node)
+            self.vex2idx[node] = idx
+            self.neighbors[idx] = []
         return idx
 
     def add_edge(self, idx1, idx2, cost):
@@ -225,33 +235,17 @@ class Graph:
         return posx, posy, posz
 
 
-def forward_kin(angle_config):
-    """ Returns the cartesian coordinates of each of the joints given the angle configuration of the arm. """
-    l1 = 0.066675
-    l2 = 0.104775
-    l3 = 0.0889
-    l4 = 0.1778
-    L = np.array([l1, l2, l3, l4])
-
-    angles = np.array([[0], [angle_config[0]], [0], [angle_config[1]], [0]])
-    alpha = np.array([[angle_config[2]], [0], [0], [angle_config[3]], [0]])
-    r = np.array([[0], [L[1]], [L[2]], [0], [0]])
-    d = np.array([[L[0]], [0], [0], [0], [L[3]]])
-    print(FK(angles, alpha, r, d))
-    return FK(angles, alpha, r, d)
-
-
 def random_angle_config(goal_angles, angle_range, graph):
     """ Returns a set of random angles within a range of the goal state angles. """
     rand_angles = [0, 0, 0, 0, 0, 0]
 
     while True:
-        for i in range(0, 6):
-            rand_angles[i] = (random() * 2 - 1) * angle_range + goal_angles[i]
+        for a in range(0, 6):
+            rand_angles[a] = (random() * 2 - 1) * angle_range + goal_angles[a]
 
-            if valid_configuration(rand_angles[0], rand_angles[1], rand_angles[2], rand_angles[3],
-                                   rand_angles[4], rand_angles[5], graph):
-                return rand_angles
+        if valid_configuration(rand_angles[0], rand_angles[1], rand_angles[2], rand_angles[3],
+                               rand_angles[4], rand_angles[5], graph):
+            return rand_angles
 
     return rand_angles
 
@@ -265,16 +259,41 @@ def steer(qrand, qnearest, epsilon):
 
 
 def RRT(startpos, endpos, obstacles, n_iter, radius, stepSize):
-    # Insert kinematics to translate start position cartesian coordinates to angles of the arm
-
-    startpos = tuple(np.concatenate((forward_kin(startpos), startpos)))
-    endpos = tuple(np.concatenate((forward_kin(endpos), endpos)))
 
     G = Graph(startpos, endpos)
 
     for _ in range(n_iter):
-        randangles = random_angle_config(endpos, 1, G)
-        randvex = tuple(np.concatenate((forward_kin(randangles), randangles)))
+        randvex = RRTNode(random_angle_config(endpos, np.pi / 2, G))
+        if isInObstacle(randvex, obstacles, radius):
+            continue
+
+        nearvex, nearidx = nearest(G, randvex.end_effector_pos, obstacles, radius)
+        if nearvex is None:
+            continue
+
+        newvex = new_vertex(randvex.angles, nearvex.angles, stepSize)
+
+        newidx = G.add_vex(newvex)
+        dist = distance(newvex.end_effector_pos, nearvex.end_effector_pos)
+        G.add_edge(newidx, nearidx, dist)
+
+        dist = distance(newvex.end_effector_pos, G.endpos.end_effector_pos)
+
+        if dist < 2 * radius:
+            endidx = G.add_vex(G.endpos)
+            # G.add_edge(newidx, endidx, dist)
+            G.success = True
+            # print('success')
+            # break
+    G.success = True
+    return G
+
+
+def RRT_star(startpos, endpos, obstacles, n_iter, radius, stepSize):
+    G = Graph(startpos, endpos)
+
+    for _ in range(n_iter):
+        randvex = G.random_position()
         if isInObstacle(randvex, obstacles, radius):
             continue
 
@@ -282,20 +301,46 @@ def RRT(startpos, endpos, obstacles, n_iter, radius, stepSize):
         if nearvex is None:
             continue
 
-        newvex = steer(randvex, nearvex, stepSize)
+        newvex = new_vertex(randvex, nearvex, stepSize)
 
         newidx = G.add_vex(newvex)
         dist = distance(newvex, nearvex)
         G.add_edge(newidx, nearidx, dist)
+        G.distances[newidx] = G.distances[nearidx] + dist
+
+        # update nearby vertices distance (if shorter)
+        for vex in G.vertices:
+            if vex == newvex:
+                continue
+
+            dist = distance(vex, newvex)
+            if dist > radius:
+                continue
+
+            line = Line(vex, newvex)
+            if isThruObstacle(line, obstacles, radius):
+                continue
+
+            idx = G.vex2idx[vex]
+            if G.distances[newidx] + dist < G.distances[idx]:
+                G.add_edge(idx, newidx, dist)
+                G.distances[idx] = G.distances[newidx] + dist
 
         dist = distance(newvex, G.endpos)
+
         if dist < 2 * radius:
             endidx = G.add_vex(G.endpos)
             G.add_edge(newidx, endidx, dist)
+            try:
+                G.distances[endidx] = min(G.distances[endidx], G.distances[newidx] + dist)
+            except:
+                G.distances[endidx] = G.distances[newidx] + dist
+
             G.success = True
             # print('success')
-            # break
+            break
     return G
+
 
 def dijkstra(G):
     """
@@ -332,32 +377,76 @@ def dijkstra(G):
     return list(path)
 
 
-# TODO: Function to plot arm configurations
+def plot(G, obstacles, radius, path=None):
+    """
+    Plot RRT, obstacles and shortest path
+    """
+    px = [x for x, y, z in G.vertices]
+    py = [y for x, y, z in G.vertices]
+    pz = [z for x, y, z in G.vertices]
+    fig, ax = plt.subplots()
 
-def plot_3d(G, obstacles, radius, path=None):
-    ax = plt.axes(projection='3d')
-    points = []
-    for p in G.vertices:
-        points.append((p[0], p[1], p[2]))
-    xdata = [x for x, y, z in points]
-    ydata = [y for x, y, z in points]
-    zdata = [z for x, y, z in points]
+    for obs in obstacles:
+        circle = plt.Circle(obs, radius, color='red')
+        ax.add_artist(circle)
 
-    lines = [(points[edge[0]], points[edge[1]]) for edge in G.edges]
-    lc = art3d.Line3DCollection(lines, colors='black', linewidths=1)
+    ax.scatter(px, py, pz, c='cyan')
+    ax.scatter(G.startpos[0], G.startpos[1], G.startpos[2], c='black')
+    ax.scatter(G.endpos[0], G.endpos[1], G.startpos[2], c='black')
+
+    lines = [(G.vertices[edge[0]], G.vertices[edge[1]]) for edge in G.edges]
+    lc = mc.LineCollection(lines, colors='green', linewidths=2)
     ax.add_collection(lc)
 
     if path is not None:
         paths = [(path[i], path[i + 1]) for i in range(len(path) - 1)]
-        lc2 = art3d.Line3DCollection(paths, colors='green', linewidths=3)
+        lc2 = mc.LineCollection(paths, colors='blue', linewidths=3)
         ax.add_collection(lc2)
+
+    ax.autoscale()
+    ax.margins(0.1)
+    plt.show()
+
+
+def arr_to_int(arr):
+    """ The int array representation of an array of arrays. """
+    new_array = []
+    for i in range(0, len(arr)):
+        new_array.append(arr[i][0])
+
+    return new_array
+
+# TODO: Function to plot arm configurations
+def plot_3d(G, obstacles, radius, path=None):
+    ax = plt.axes(projection='3d')
+    end_effector_positions = []
+    for v in G.vertices:
+        end_effector_positions.append(v.end_effector_pos)
+
+    int_vertices = list(map(arr_to_int, end_effector_positions))
+
+    xdata = [x for x, y, z in int_vertices]
+    ydata = [y for x, y, z in int_vertices]
+    zdata = [z for x, y, z in int_vertices]
+
+    for e in G.edges:
+        print(e)
+
+    lines = [(int_vertices[edge[0]], int_vertices[edge[1]]) for edge in G.edges]
+    lc = art3d.Line3DCollection(lines, colors='black', linewidths=1)
+    ax.add_collection(lc)
+    print(path)
+    #if path is not None:
+    #    paths = [(path[i], path[i + 1]) for i in range(len(path) - 1)]
+    #    lc2 = art3d.Line3DCollection(paths, colors='green', linewidths=3)
+    #    ax.add_collection(lc2)
 
     ax.scatter3D(xdata, ydata, zdata, c=zdata, cmap='Blues');
     plt.show()
 
 
 def pathSearch(startpos, endpos, obstacles, n_iter, radius, stepSize):
-    G = RRT(startpos, endpos, obstacles, n_iter, radius, stepSize)
+    G = RRT_star(startpos, endpos, obstacles, n_iter, radius, stepSize)
     if G.success:
         path = dijkstra(G)
         # plot(G, obstacles, radius, path)
@@ -365,11 +454,13 @@ def pathSearch(startpos, endpos, obstacles, n_iter, radius, stepSize):
 
 
 if __name__ == '__main__':
+
     startpos = (0., 0., 0., 0., 0., 0.)
-    endpos = (5., 5., 5., 5., 5., 5.)
+    endpos = (100., 100., 100., 100., 100., 100.)
+
     obstacles = [(1., 1.), (2., 2.)]
     n_iter = 200
-    radius = 0.7
+    radius = 0.4
     stepSize = 0.7
 
     start_time = time.time()
@@ -378,8 +469,13 @@ if __name__ == '__main__':
 
     if G.success:
         path = dijkstra(G)
-        print(path)
+        #print(path[0].angles)
+        #print(path[1].angles)
+        #print(path[2].angles)
+        #print(path)
+
         plot_3d(G, obstacles, radius, path)
     else:
-        plot_3d(G, obstacles, radius)
+        # plot_3d(G, obstacles, radius)
+        print(":(")
     print("\nTime taken: ", (time.time()-start_time))
