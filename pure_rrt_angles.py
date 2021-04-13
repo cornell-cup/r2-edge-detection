@@ -416,9 +416,11 @@ def arr_to_int(arr):
 
     return new_array
 
+
 # TODO: Function to plot arm configurations
 def plot_3d(G, obstacles, radius, path=None):
     ax = plt.axes(projection='3d')
+    ax.autoscale(True)
     end_effector_positions = []
     for v in G.vertices:
         end_effector_positions.append(v.end_effector_pos)
@@ -469,10 +471,10 @@ if __name__ == '__main__':
 
     if G.success:
         path = dijkstra(G)
-        #print(path[0].angles)
-        #print(path[1].angles)
-        #print(path[2].angles)
-        #print(path)
+        # print(path[0].angles)
+        # print(path[1].angles)
+        # print(path[2].angles)
+        print(path)
 
         plot_3d(G, obstacles, radius, path)
     else:

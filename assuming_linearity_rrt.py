@@ -368,7 +368,22 @@ def norm(tup):
     result = 0
     for i in tup:
         result += i**2
-    return sqrt(result)
+    return math.sqrt(result)
+
+def temp_valid_configuration(a1, a2, a3, a4, a5, a6):
+    l1 = 0.066675
+    l2 = 0.104775
+    l3 = 0.0889
+    l4 = 0.1778
+    link_lengths = np.array([l2, l3])
+    if link_lengths[0] * math.cos(math.radians(a2)) < 0:
+        return False, None
+    if link_lengths[1] * math.cos(math.radians(a3)) + link_lengths[0] * math.cos(math.radians(a2)) < 0:
+        return False, None
+    return True, [(a1 + 360) % 360, (a2 + 360) % 360, \
+           (a3 + 360) % 360, (a4 + 360) % 360, \
+           (a5 + 360) % 360, (a6 + 360) % 360]
+
 
 
 if __name__ == '__main__':
@@ -381,28 +396,31 @@ if __name__ == '__main__':
 
     # assumption that start and end are in degrees
     for i in startpos:
-        assert 0 <= i <= math.pi/180
+        assert 0 <= i <= 358.0*math.pi/180
     for j in endpos:
-        assert 0 <= j <= math.pi/180
+        assert 0 <= j <= 358.0*math.pi/180
 
     updates = [startpos]
     deltas = tuple(map(lambda m, n: m - n, endpos, startpos))
     deltas = [i*stepSize/norm(deltas) for i in deltas]
-
+    print(deltas)
     while True:
-        if updates[-1] == endpos:
+        acc = True
+        for i in range(len(endpos)):
+            acc = acc and abs(updates[-1][i] - endpos[i]) < 0.05
+        if acc:
             break
         updates.append(tuple(map(lambda m, n: m + n, updates[-1], deltas)))
 
     # TODO: valid configuration implementation without tree argument
-    assert valid_configuration(startpos[0], startpos[1], startpos[2], startpos[3], startpos[4], startpos[5])
-    assert valid_configuration(endpos[0], endpos[1], endpos[2], endpos[3], endpos[4], endpos[5])
+    # assert valid_configuration(startpos[0], startpos[1], startpos[2], startpos[3], startpos[4], startpos[5])
+    # assert valid_configuration(endpos[0], endpos[1], endpos[2], endpos[3], endpos[4], endpos[5])
 
     finalUpdates = updates
     for i in updates:
-        if not valid_configuration(i[0], i[1], i[2], i[3], i[4], i[5]):
+        if not temp_valid_configuration(i[0], i[1], i[2], i[3], i[4], i[5]):
             for k in updates[updates.index(i)+1:]:
-                if valid_configuration(k[0], k[1], k[2], k[3], k[4], k[5]):
+                if temp_valid_configuration(k[0], k[1], k[2], k[3], k[4], k[5]):
                     G = RRT(i, k, obstacles, n_iter, radius, radius)
                     while not G.success and updates.index(i) > 0 and updates.index(k) < len(updates)-1:
                         i = updates[updates.index(i)-1]
@@ -410,8 +428,9 @@ if __name__ == '__main__':
                         G = RRT(i, k, obstacles, n_iter, radius, radius)
                     path = dijkstra(G)
                     finalUpdates = finalUpdates[0:updates.index[i]-1] + path + finalUpdates[updates.index[k]+1:]
-
-    
+                    
+    for u in finalUpdates:
+        print(u)
     # start_time = time.time()
     # # G = RRT_star(startpos, endpos, obstacles, n_iter, radius, stepSize)
     # G = RRT(startpos, endpos, obstacles, n_iter, radius, stepSize)
