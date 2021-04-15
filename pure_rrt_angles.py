@@ -65,7 +65,6 @@ def isThruObstacle(line, obstacles, radius):
     return False
 
 
-# TODO: Implement a greedy search to find the approximate nearest neighbor
 def nearest(G, vex, obstacles, radius):
     Nvex = None
     Nidx = None
@@ -181,11 +180,7 @@ class RRTNode(object):
 
 
 class Graph:
-    # Link lengths
-
-    # possibly only need cartesian coordinates for plotting?
     def __init__(self, start_angles, end_angles):
-        # Cartesian coordinates
         self.startpos = RRTNode(start_angles)
         self.endpos = RRTNode(end_angles)
 
@@ -249,6 +244,10 @@ def random_angle_config(goal_angles, angle_range, graph):
 
     return rand_angles
 
+def six_random_angles():
+    """ Returns 6 random numbers in the range [0, 2*pi] """
+    return random() * 2 * math.pi, random() * 2 * math.pi, random() * 2 * math.pi, random() * 2 * math.pi,\
+           random() * 2 * math.pi, random() * 2 * math.pi
 
 def steer(qrand, qnearest, epsilon):
     dist = math.dist(qrand, qnearest)
@@ -263,7 +262,7 @@ def RRT(startpos, endpos, obstacles, n_iter, radius, stepSize):
     G = Graph(startpos, endpos)
 
     for _ in range(n_iter):
-        randvex = RRTNode(random_angle_config(endpos, np.pi / 2, G))
+        randvex = RRTNode(random_angle_config(endpos, np.pi, G))
         if isInObstacle(randvex, obstacles, radius):
             continue
 
@@ -277,68 +276,15 @@ def RRT(startpos, endpos, obstacles, n_iter, radius, stepSize):
         dist = distance(newvex.end_effector_pos, nearvex.end_effector_pos)
         G.add_edge(newidx, nearidx, dist)
 
-        dist = distance(newvex.end_effector_pos, G.endpos.end_effector_pos)
+        dist_to_goal = distance(newvex.end_effector_pos, G.endpos.end_effector_pos)
 
-        if dist < 2 * radius:
+        if dist_to_goal < 2 * radius:
             endidx = G.add_vex(G.endpos)
-            # G.add_edge(newidx, endidx, dist)
-            G.success = True
-            # print('success')
-            # break
-    G.success = True
-    return G
-
-
-def RRT_star(startpos, endpos, obstacles, n_iter, radius, stepSize):
-    G = Graph(startpos, endpos)
-
-    for _ in range(n_iter):
-        randvex = G.random_position()
-        if isInObstacle(randvex, obstacles, radius):
-            continue
-
-        nearvex, nearidx = nearest(G, randvex, obstacles, radius)
-        if nearvex is None:
-            continue
-
-        newvex = new_vertex(randvex, nearvex, stepSize)
-
-        newidx = G.add_vex(newvex)
-        dist = distance(newvex, nearvex)
-        G.add_edge(newidx, nearidx, dist)
-        G.distances[newidx] = G.distances[nearidx] + dist
-
-        # update nearby vertices distance (if shorter)
-        for vex in G.vertices:
-            if vex == newvex:
-                continue
-
-            dist = distance(vex, newvex)
-            if dist > radius:
-                continue
-
-            line = Line(vex, newvex)
-            if isThruObstacle(line, obstacles, radius):
-                continue
-
-            idx = G.vex2idx[vex]
-            if G.distances[newidx] + dist < G.distances[idx]:
-                G.add_edge(idx, newidx, dist)
-                G.distances[idx] = G.distances[newidx] + dist
-
-        dist = distance(newvex, G.endpos)
-
-        if dist < 2 * radius:
-            endidx = G.add_vex(G.endpos)
-            G.add_edge(newidx, endidx, dist)
-            try:
-                G.distances[endidx] = min(G.distances[endidx], G.distances[newidx] + dist)
-            except:
-                G.distances[endidx] = G.distances[newidx] + dist
-
+            G.add_edge(newidx, endidx, dist_to_goal)
             G.success = True
             # print('success')
             break
+
     return G
 
 
@@ -354,6 +300,9 @@ def dijkstra(G):
     dist = {node: float('inf') for node in nodes}
     prev = {node: None for node in nodes}
     dist[srcIdx] = 0
+
+    print(nodes)
+    print(dist)
 
     while nodes:
         curNode = min(nodes, key=lambda node: dist[node])
@@ -377,37 +326,6 @@ def dijkstra(G):
     return list(path)
 
 
-def plot(G, obstacles, radius, path=None):
-    """
-    Plot RRT, obstacles and shortest path
-    """
-    px = [x for x, y, z in G.vertices]
-    py = [y for x, y, z in G.vertices]
-    pz = [z for x, y, z in G.vertices]
-    fig, ax = plt.subplots()
-
-    for obs in obstacles:
-        circle = plt.Circle(obs, radius, color='red')
-        ax.add_artist(circle)
-
-    ax.scatter(px, py, pz, c='cyan')
-    ax.scatter(G.startpos[0], G.startpos[1], G.startpos[2], c='black')
-    ax.scatter(G.endpos[0], G.endpos[1], G.startpos[2], c='black')
-
-    lines = [(G.vertices[edge[0]], G.vertices[edge[1]]) for edge in G.edges]
-    lc = mc.LineCollection(lines, colors='green', linewidths=2)
-    ax.add_collection(lc)
-
-    if path is not None:
-        paths = [(path[i], path[i + 1]) for i in range(len(path) - 1)]
-        lc2 = mc.LineCollection(paths, colors='blue', linewidths=3)
-        ax.add_collection(lc2)
-
-    ax.autoscale()
-    ax.margins(0.1)
-    plt.show()
-
-
 def arr_to_int(arr):
     """ The int array representation of an array of arrays. """
     new_array = []
@@ -418,49 +336,83 @@ def arr_to_int(arr):
 
 # TODO: Function to plot arm configurations
 def plot_3d(G, obstacles, radius, path=None):
+    print(len(path))
     ax = plt.axes(projection='3d')
     end_effector_positions = []
     for v in G.vertices:
         end_effector_positions.append(v.end_effector_pos)
 
-    int_vertices = list(map(arr_to_int, end_effector_positions))
+    float_vertices = list(map(arr_to_int, end_effector_positions))
+    intermediate_vertices = []
+    for i in range(1, len(float_vertices) - 1):
+        intermediate_vertices.append(float_vertices[i])
 
-    xdata = [x for x, y, z in int_vertices]
-    ydata = [y for x, y, z in int_vertices]
-    zdata = [z for x, y, z in int_vertices]
+    #print(end_effector_positions[0])
+    #print(end_effector_positions[-1])
+    xdata = [x for x, y, z in intermediate_vertices]
+    ydata = [y for x, y, z in intermediate_vertices]
+    zdata = [z for x, y, z in intermediate_vertices]
 
-    for e in G.edges:
-        print(e)
+    #for e in G.edges:
+    #    print(e)
 
-    lines = [(int_vertices[edge[0]], int_vertices[edge[1]]) for edge in G.edges]
+    lines = [(float_vertices[edge[0]], float_vertices[edge[1]]) for edge in G.edges]
     lc = art3d.Line3DCollection(lines, colors='black', linewidths=1)
     ax.add_collection(lc)
-    print(path)
-    #if path is not None:
-    #    paths = [(path[i], path[i + 1]) for i in range(len(path) - 1)]
-    #    lc2 = art3d.Line3DCollection(paths, colors='green', linewidths=3)
-    #    ax.add_collection(lc2)
 
-    ax.scatter3D(xdata, ydata, zdata, c=zdata, cmap='Blues');
+    if path is not None:
+        path_vertices = []
+        for i in range(0, len(path)):
+            path_vertices.append(path[i].end_effector_pos)
+        path_vertices = list(map(arr_to_int, path_vertices))
+        paths = [(path_vertices[i], path_vertices[i + 1]) for i in range(len(path_vertices) - 1)]
+        lc2 = art3d.Line3DCollection(paths, colors='green', linewidths=3)
+        ax.add_collection(lc2)
+
+    ax.scatter3D(xdata, ydata, zdata, c=zdata, cmap='Blues')
+    ax.scatter3D(G.startpos.end_effector_pos[0], G.startpos.end_effector_pos[1], G.startpos.end_effector_pos[2], c='black')
+    ax.scatter3D(G.endpos.end_effector_pos[0], G.endpos.end_effector_pos[1], G.endpos.end_effector_pos[2], c='black')
+
+    ax.set_xlim3d(-.3, .3)
+    ax.set_ylim3d(-.3, .3)
+    ax.set_zlim3d(-.3, .3)
+
     plt.show()
 
 
 def pathSearch(startpos, endpos, obstacles, n_iter, radius, stepSize):
-    G = RRT_star(startpos, endpos, obstacles, n_iter, radius, stepSize)
+    G = RRT(startpos, endpos, obstacles, n_iter, radius, stepSize)
     if G.success:
         path = dijkstra(G)
         # plot(G, obstacles, radius, path)
         return path
 
 
+def plot_random_points(num):
+    """ Plots [num] random points from random angle configurations """
+    ax = plt.axes(projection='3d')
+    points = []
+    for i in range(0, num):
+        angles = six_random_angles()
+        end_pos = RRTNode(angles).end_effector_pos
+        end_pos = arr_to_int(end_pos)
+        points.append(end_pos)
+
+    xdata = [x for x, y, z in points]
+    ydata = [y for x, y, z in points]
+    zdata = [z for x, y, z in points]
+
+    ax.scatter3D(xdata, ydata, zdata, c=zdata, cmap='Blues');
+    plt.show()
+
 if __name__ == '__main__':
 
     startpos = (0., 0., 0., 0., 0., 0.)
-    endpos = (100., 100., 100., 100., 100., 100.)
+    endpos = (2., 2., 2., 2., 2., 2.)
 
     obstacles = [(1., 1.), (2., 2.)]
     n_iter = 200
-    radius = 0.4
+    radius = 0.02
     stepSize = 0.7
 
     start_time = time.time()
@@ -479,3 +431,4 @@ if __name__ == '__main__':
         # plot_3d(G, obstacles, radius)
         print(":(")
     print("\nTime taken: ", (time.time()-start_time))
+    # plot_random_points(50)
