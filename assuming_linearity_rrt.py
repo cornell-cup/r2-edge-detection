@@ -4,9 +4,7 @@ Copyright (c) 2019 Fanjin Zeng
 This work is licensed under the terms of the MIT license, see <https://opensource.org/licenses/MIT>.
 """
 import math
-from builtins import float, min, enumerate, object, len, range, list
-from math import dist
-
+from builtins import float, min, enumerate, object, len, range, list, tuple, map
 import numpy as np
 from random import random
 import matplotlib.pyplot as plt
@@ -15,7 +13,6 @@ from matplotlib import collections as mc
 from collections import deque
 from mpl_toolkits.mplot3d import art3d
 from kinematics import FK
-from spatial_hashing import SpatialHash
 from rrt import valid_configuration
 import time
 
@@ -86,47 +83,6 @@ def nearest(G, vex, obstacles, radius):
             Nvex = v
 
     return Nvex, Nidx
-
-
-def explorable(contenders, min_dist, min_node, goal_node, step_size, has_seen):
-    if not contenders:
-        return min_node
-
-    explorable_nodes = []
-    for node in contenders:
-        has_seen.append(node)
-        new_dist = distance(node, goal_node)
-        if new_dist <= min_dist:
-            explorable_nodes.append(node)
-            min_node = node
-            min_dist = distance(node, goal_node)
-
-    new_contenders = [exp_node.neighbors for exp_node in explorable_nodes] - has_seen
-    return explorable(new_contenders, min_dist, min_node, goal_node, step_size, has_seen)
-
-
-def nearest_greedy(G, vex, obstacles, radius):
-    root = G.startpos
-    return explorable(G.neighbors, float("inf"), None, vex, radius, [])
-
-
-def nearest_spatial_hash(S, vex):
-    nearest_node = None
-    min_distance = float("inf")
-    for s in S.contents:
-        # update if one finds a nearest neighbor
-        new_d = dist(s, S.hash(vex))
-        if new_d < min_distance:
-            nearest_node = vex
-            min_distance = new_d
-
-    final_node = None
-    for t in S.contents[nearest_node]:
-        new_d = dist(s, S.hash(vex))
-        if new_d < min_distance:
-            final_node = vex
-            min_distance = new_d
-    return final_node
 
 
 def new_vertex(randvex, nearvex, stepSize):
@@ -221,14 +177,14 @@ class Graph:
     # TODO: add fields for angles of arm
     def __init__(self, startpos, endpos):
         # Cartesian coordinates
-        self.startpos = startpos
+        self.startpos = (startpos)
         self.endpos = endpos
-        self.spatial_hash = SpatialHash(1.5)
+
         self.vertices = [startpos]
         self.edges = []
         self.success = False
 
-        self.vex2idx = {startpos: 0}
+        # self.vex2idx = {startpos: 0}
         self.neighbors = {0: []}
         self.distances = {0: 0.}
 
@@ -241,17 +197,16 @@ class Graph:
         l2 = 0.104775
         l3 = 0.0889
         l4 = 0.1778
-        link_lengths = np.array([l1, l2, l3, l4])
+        self.link_lengths = np.array([l1, l2, l3, l4])
 
     def add_vex(self, pos):
-        try:
-            idx = self.vex2idx[pos]
-        except:
-            idx = len(self.vertices)
-            self.vertices.append(pos)
-            self.vex2idx[pos] = idx
-            self.spatial_hash.insert_object_for_point(pos, pos)
-            self.neighbors[idx] = []
+        # try:
+        #     idx = self.vex2idx[pos]
+        # except:
+        idx = len(self.vertices)
+        self.vertices.append(pos)
+        # self.vex2idx[pos] = idx
+        self.neighbors[idx] = []
         return idx
 
     def add_edge(self, idx1, idx2, cost):
@@ -270,20 +225,35 @@ class Graph:
         return posx, posy, posz
 
 
-def random_angle_config():
-    # How to generate random angle configurations within the configuration space?
-    # How to bias the angle configurations towards the goal?
-    while True:
-        a1 = random() * 2 * math.pi
-        a2 = random() * 2 * math.pi
-        a3 = random() * 2 * math.pi
-        a4 = random() * 2 * math.pi
-        a5 = random() * 2 * math.pi
-        a6 = random() * 2 * math.pi
+def forward_kin(angle_config):
+    """ Returns the cartesian coordinates of each of the joints given the angle configuration of the arm. """
+    l1 = 0.066675
+    l2 = 0.104775
+    l3 = 0.0889
+    l4 = 0.1778
+    L = np.array([l1, l2, l3, l4])
 
-        if valid_configuration(a1, a2, a3, a4, a5, a6, Graph(0,0)):
-            return [a1, a2, a3, a4, a5, a6]
-    return []
+    angles = np.array([[0], [angle_config[0]], [0], [angle_config[1]], [0]])
+    alpha = np.array([[angle_config[2]], [0], [0], [angle_config[3]], [0]])
+    r = np.array([[0], [L[1]], [L[2]], [0], [0]])
+    d = np.array([[L[0]], [0], [0], [0], [L[3]]])
+    print(FK(angles, alpha, r, d))
+    return FK(angles, alpha, r, d)
+
+
+def random_angle_config(goal_angles, angle_range, graph):
+    """ Returns a set of random angles within a range of the goal state angles. """
+    rand_angles = [0, 0, 0, 0, 0, 0]
+
+    while True:
+        for i in range(0, 6):
+            rand_angles[i] = (random() * 2 - 1) * angle_range + goal_angles[i]
+
+            if valid_configuration(rand_angles[0], rand_angles[1], rand_angles[2], rand_angles[3],
+                                   rand_angles[4], rand_angles[5], graph):
+                return rand_angles
+
+    return rand_angles
 
 
 def steer(qrand, qnearest, epsilon):
@@ -297,10 +267,14 @@ def steer(qrand, qnearest, epsilon):
 def RRT(startpos, endpos, obstacles, n_iter, radius, stepSize):
     # Insert kinematics to translate start position cartesian coordinates to angles of the arm
 
+    startpos = tuple(np.concatenate((forward_kin(startpos), startpos)))
+    endpos = tuple(np.concatenate((forward_kin(endpos), endpos)))
+
     G = Graph(startpos, endpos)
 
     for _ in range(n_iter):
-        randvex = G.random_position()
+        randangles = random_angle_config(endpos, 1, G)
+        randvex = tuple(np.concatenate((forward_kin(randangles), randangles)))
         if isInObstacle(randvex, obstacles, radius):
             continue
 
@@ -308,7 +282,7 @@ def RRT(startpos, endpos, obstacles, n_iter, radius, stepSize):
         if nearvex is None:
             continue
 
-        newvex = new_vertex(randvex, nearvex, stepSize)
+        newvex = steer(randvex, nearvex, stepSize)
 
         newidx = G.add_vex(newvex)
         dist = distance(newvex, nearvex)
@@ -322,60 +296,6 @@ def RRT(startpos, endpos, obstacles, n_iter, radius, stepSize):
             # print('success')
             # break
     return G
-
-
-def RRT_star(startpos, endpos, obstacles, n_iter, radius, stepSize):
-    G = Graph(startpos, endpos)
-
-    for _ in range(n_iter):
-        randvex = G.random_position()
-        if isInObstacle(randvex, obstacles, radius):
-            continue
-
-        # change this line to determine which nearest neighbor algorithm to use!!!
-        nearvex, nearidx = nearest(G, randvex, obstacles, radius)
-        if nearvex is None:
-            continue
-
-        newvex = new_vertex(randvex, nearvex, stepSize)
-
-        newidx = G.add_vex(newvex)
-        dist = distance(newvex, nearvex)
-        G.add_edge(newidx, nearidx, dist)
-        G.distances[newidx] = G.distances[nearidx] + dist
-
-        # update nearby vertices distance (if shorter)
-        for vex in G.vertices:
-            if vex == newvex:
-                continue
-
-            dist = distance(vex, newvex)
-            if dist > radius:
-                continue
-
-            line = Line(vex, newvex)
-            if isThruObstacle(line, obstacles, radius):
-                continue
-
-            idx = G.vex2idx[vex]
-            if G.distances[newidx] + dist < G.distances[idx]:
-                G.add_edge(idx, newidx, dist)
-                G.distances[idx] = G.distances[newidx] + dist
-
-        dist = distance(newvex, G.endpos)
-        if dist < 2 * radius:
-            endidx = G.add_vex(G.endpos)
-            G.add_edge(newidx, endidx, dist)
-            try:
-                G.distances[endidx] = min(G.distances[endidx], G.distances[newidx] + dist)
-            except:
-                G.distances[endidx] = G.distances[newidx] + dist
-
-            G.success = True
-            # print('success')
-            break
-    return G
-
 
 def dijkstra(G):
     """
@@ -412,52 +332,24 @@ def dijkstra(G):
     return list(path)
 
 
-def plot(G, obstacles, radius, path=None):
-    """
-    Plot RRT, obstacles and shortest path
-    """
-    px = [x for x, y, z in G.vertices]
-    py = [y for x, y, z in G.vertices]
-    pz = [z for x, y, z in G.vertices]
-    fig, ax = plt.subplots()
-
-    for obs in obstacles:
-        circle = plt.Circle(obs, radius, color='red')
-        ax.add_artist(circle)
-
-    ax.scatter(px, py, pz, c='cyan')
-    ax.scatter(G.startpos[0], G.startpos[1], G.startpos[2], c='black')
-    ax.scatter(G.endpos[0], G.endpos[1], G.startpos[2], c='black')
-
-    lines = [(G.vertices[edge[0]], G.vertices[edge[1]]) for edge in G.edges]
-    lc = mc.LineCollection(lines, colors='green', linewidths=2)
-    ax.add_collection(lc)
-
-    if path is not None:
-        paths = [(path[i], path[i + 1]) for i in range(len(path) - 1)]
-        lc2 = mc.LineCollection(paths, colors='blue', linewidths=3)
-        ax.add_collection(lc2)
-
-    ax.autoscale()
-    ax.margins(0.1)
-    plt.show()
-
-
 # TODO: Function to plot arm configurations
 
 def plot_3d(G, obstacles, radius, path=None):
     ax = plt.axes(projection='3d')
-    xdata = [x for x, y, z in G.vertices]
-    ydata = [y for x, y, z in G.vertices]
-    zdata = [z for x, y, z in G.vertices]
+    points = []
+    for p in G.vertices:
+        points.append((p[0], p[1], p[2]))
+    xdata = [x for x, y, z in points]
+    ydata = [y for x, y, z in points]
+    zdata = [z for x, y, z in points]
 
-    lines = [(G.vertices[edge[0]], G.vertices[edge[1]]) for edge in G.edges]
+    lines = [(points[edge[0]], points[edge[1]]) for edge in G.edges]
     lc = art3d.Line3DCollection(lines, colors='black', linewidths=1)
     ax.add_collection(lc)
 
     if path is not None:
         paths = [(path[i], path[i + 1]) for i in range(len(path) - 1)]
-        lc2 = art3d.Line3DCollection(paths, colors='red', linewidths=3)
+        lc2 = art3d.Line3DCollection(paths, colors='green', linewidths=3)
         ax.add_collection(lc2)
 
     ax.scatter3D(xdata, ydata, zdata, c=zdata, cmap='Blues');
@@ -465,32 +357,88 @@ def plot_3d(G, obstacles, radius, path=None):
 
 
 def pathSearch(startpos, endpos, obstacles, n_iter, radius, stepSize):
-    G = RRT_star(startpos, endpos, obstacles, n_iter, radius, stepSize)
+    G = RRT(startpos, endpos, obstacles, n_iter, radius, stepSize)
     if G.success:
         path = dijkstra(G)
         # plot(G, obstacles, radius, path)
         return path
 
 
+def norm(tup):
+    result = 0
+    for i in tup:
+        result += i**2
+    return math.sqrt(result)
+
+def temp_valid_configuration(a1, a2, a3, a4, a5, a6):
+    l1 = 0.066675
+    l2 = 0.104775
+    l3 = 0.0889
+    l4 = 0.1778
+    link_lengths = np.array([l2, l3])
+    if link_lengths[0] * math.cos(math.radians(a2)) < 0:
+        return False, None
+    if link_lengths[1] * math.cos(math.radians(a3)) + link_lengths[0] * math.cos(math.radians(a2)) < 0:
+        return False, None
+    return True, [(a1 + 360) % 360, (a2 + 360) % 360, \
+           (a3 + 360) % 360, (a4 + 360) % 360, \
+           (a5 + 360) % 360, (a6 + 360) % 360]
+
+
+
 if __name__ == '__main__':
-    startpos = (0., 0., 0.)
-    endpos = (5., 5., 5.)
+    startpos = (0., 0., 0., 0., 0., 0.)
+    endpos = (5., 5., 5., 5., 5., 5.)
     obstacles = [(1., 1.), (2., 2.)]
-    n_iter = 800
-    radius = 0.5
-    stepSize = 0.5
+    n_iter = 200
+    radius = 0.7
+    stepSize = 5/180*math.pi
 
-    start_time = time.time()
-    # G = RRT_star(startpos, endpos, obstacles, n_iter, radius, stepSize)
+    # assumption that start and end are in degrees
+    for i in startpos:
+        assert 0 <= i <= 358.0*math.pi/180
+    for j in endpos:
+        assert 0 <= j <= 358.0*math.pi/180
 
-    for i in range(10):
-        G = RRT(startpos, endpos, obstacles, n_iter, radius, stepSize)
-        if G.success:
-            path = dijkstra(G)
-            print(path)
-        #
-        #     plot_3d(G, obstacles, radius, path)
-        # else:
-        #     plot_3d(G, obstacles, radius)
-    print("\nTime taken: ", (time.time()-start_time))
+    updates = [startpos]
+    deltas = tuple(map(lambda m, n: m - n, endpos, startpos))
+    deltas = [i*stepSize/norm(deltas) for i in deltas]
+    print(deltas)
+    while True:
+        acc = True
+        for i in range(len(endpos)):
+            acc = acc and abs(updates[-1][i] - endpos[i]) < 0.05
+        if acc:
+            break
+        updates.append(tuple(map(lambda m, n: m + n, updates[-1], deltas)))
 
+    # TODO: valid configuration implementation without tree argument
+    # assert valid_configuration(startpos[0], startpos[1], startpos[2], startpos[3], startpos[4], startpos[5])
+    # assert valid_configuration(endpos[0], endpos[1], endpos[2], endpos[3], endpos[4], endpos[5])
+
+    finalUpdates = updates
+    for i in updates:
+        if not temp_valid_configuration(i[0], i[1], i[2], i[3], i[4], i[5]):
+            for k in updates[updates.index(i)+1:]:
+                if temp_valid_configuration(k[0], k[1], k[2], k[3], k[4], k[5]):
+                    G = RRT(i, k, obstacles, n_iter, radius, radius)
+                    while not G.success and updates.index(i) > 0 and updates.index(k) < len(updates)-1:
+                        i = updates[updates.index(i)-1]
+                        k = updates[updates.index(i)+1]
+                        G = RRT(i, k, obstacles, n_iter, radius, radius)
+                    path = dijkstra(G)
+                    finalUpdates = finalUpdates[0:updates.index[i]-1] + path + finalUpdates[updates.index[k]+1:]
+                    
+    for u in finalUpdates:
+        print(u)
+    # start_time = time.time()
+    # # G = RRT_star(startpos, endpos, obstacles, n_iter, radius, stepSize)
+    # G = RRT(startpos, endpos, obstacles, n_iter, radius, stepSize)
+    #
+    # if G.success:
+    #     path = dijkstra(G)
+    #     print(path)
+    #     plot_3d(G, obstacles, radius, path)
+    # else:
+    #     plot_3d(G, obstacles, radius)
+    # print("\nTime taken: ", (time.time()-start_time))
