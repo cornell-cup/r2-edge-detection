@@ -8,12 +8,12 @@ import math
 import numpy as np
 from random import random
 import matplotlib.pyplot as plt
-from mpl_toolkits import mplot3d
-from matplotlib import collections as mc
 from collections import deque
 from mpl_toolkits.mplot3d import art3d
 from kinematics import FK
 import time
+import random
+import visualization
 
 
 class Line:
@@ -114,7 +114,7 @@ def steer(rand_angles, near_angles, step_size):
     dirn = (dirn / length) * min(step_size, length)
 
     new_angles = (near_angles[0] + dirn[0], near_angles[1] + dirn[1], near_angles[2] + dirn[2],
-                  near_angles[3] + dirn[3], near_angles[4] + dirn[4], near_angles[5] + dirn[5])
+                  near_angles[3] + dirn[3], near_angles[4], near_angles[5])
     return RRTNode(new_angles)
 
 
@@ -126,32 +126,6 @@ def new_vertex(randvex, nearvex, stepSize):
 
     newvex = (nearvex[0] + dirn[0], nearvex[1] + dirn[1], nearvex[2] + dirn[2])
     return newvex
-
-
-def window(start_coords, end_coords):
-    """ Define seach window - 2 times of start to end rectangle"""
-    width = end_coords[0] - start_coords[0]
-    height = end_coords[1] - start_coords[1]
-    winx = start_coords[0] - (width / 2.)
-    winy = start_coords[1] - (height / 2.)
-    return winx, winy, width, height
-
-
-def is_in_window(pos, winx, winy, width, height):
-    """ Restrict new vertex insides search window"""
-    if winx < pos[0] < winx + width and \
-            winy < pos[1] < winy + height:
-        return True
-    else:
-        return False
-
-
-# Specifications of arm
-l1 = 0.066675
-l2 = 0.104775
-l3 = 0.0889
-l4 = 0.1778
-link_lengths = np.array([l1, l2, l3, l4])
 
 
 class RRTNode(object):
@@ -174,16 +148,21 @@ class RRTNode(object):
 
     def __init__(self, configuration):
         self.angles = configuration
-        self.end_effector_pos = self.forward_kinematics()
+        self.joint_positions = self.generate_joint_positions()
+        self.end_effector_pos = self.joint_positions[1]
 
     def forward_kinematics(self):
         """ Returns the [x, y, z] corresponding the node's angle configuration. """
 
-        angles = np.array([[0], [self.angles[0]], [0], [self.angles[1]], [0]])
-        alpha = np.array([[self.angles[2]], [0], [0], [self.angles[3]], [0]])
+        angles = np.array([[0], [self.angles[1]], [0], [self.angles[0]], [0]])
+        alpha = np.array([[self.angles[3]], [0], [0], [self.angles[2]], [0]])
         r = np.array([[0], [link_lengths[1]], [link_lengths[2]], [0], [0]])
         d = np.array([[link_lengths[0]], [0], [0], [0], [link_lengths[3]]])
         return FK(angles, alpha, r, d)
+
+    def generate_joint_positions(self):
+        """ Returns the [x, y, z] of the two joints based on the node's angle configuration. """
+        return visualization.joint_positions(*self.angles[0:4])
 
 
 class Graph:
@@ -225,7 +204,6 @@ class Graph:
         self.sz = endpos[2] - startpos[2]
 
     def add_vex(self, node):
-        # make another data structure for cartesian coordinates
         try:
             idx = self.node_to_index[node]
         except:
@@ -243,11 +221,13 @@ class Graph:
 
 def valid_configuration(a1, a2, a3, a4, a5, a6):
     """ Returns true if the given angle configuration is a valid one. """
+
+    link_lengths = [visualization.r_1, visualization.r_2]
     #  for a given a1, an a2 is always valid. However, the a3 is not necessarily valid:
     #  use spherical coordinates for validity
-    if link_lengths[0] * math.cos(math.radians(a2)) < 0:
+    if link_lengths[0] * math.cos(a2) < 0:
         return False, None
-    if link_lengths[1] * math.cos(math.radians(a3)) + link_lengths[0] * math.cos(math.radians(a2)) < 0:
+    if link_lengths[1] * math.cos(a3) + link_lengths[0] * math.cos(a2) < 0:
         return False, None
     return True, [(a1 + 360) % 360, (a2 + 360) % 360, \
            (a3 + 360) % 360, (a4 + 360) % 360, \
@@ -262,19 +242,13 @@ def random_angle_config(goal_angles, angle_range, i, amt_iter):
 
     while True:
         for a in range(0, 6):
-            rand_angles[a] = (random() * 2 - 1) * bias * angle_range + goal_angles[a]
+            rand_angles[a] = (random.random() * 2 - 1) * bias * angle_range + goal_angles[a]
 
         if valid_configuration(rand_angles[0], rand_angles[1], rand_angles[2], rand_angles[3],
                                rand_angles[4], rand_angles[5]):
             return rand_angles
 
     return rand_angles
-
-
-def six_random_angles():
-    """ Returns 6 random numbers in the range [0, 2*pi] """
-    return (random() * 2 - 1) * 2 * math.pi, (random() * 2 - 1) * 2 * math.pi, (random() * 2 - 1) * 2 * math.pi, \
-           (random() * 2 - 1) * 2 * math.pi, (random() * 2 - 1) * 2 * math.pi, (random() * 2 - 1) * 2 * math.pi
 
 
 def rrt(start_angles, end_angles, obstacles, n_iter, radius, stepSize):
@@ -323,9 +297,6 @@ def dijkstra(G):
     prev = {node: None for node in nodes}
     dist[srcIdx] = 0
 
-    print(nodes)
-    print(dist)
-
     while nodes:
         curNode = min(nodes, key=lambda node: dist[node])
         nodes.remove(curNode)
@@ -352,7 +323,7 @@ def arr_to_int(arr):
     """ The int array representation of an array of arrays. """
     new_array = []
     for i in range(0, len(arr)):
-        new_array.append(arr[i][0])
+        new_array.append(arr[i])
 
     return new_array
 
@@ -374,6 +345,7 @@ def plot_3d(G, path=None):
     zdata = [z for x, y, z in intermediate_vertices]
 
     lines = [(float_vertices[edge[0]], float_vertices[edge[1]]) for edge in G.edges]
+
     lc = art3d.Line3DCollection(lines, colors='black', linewidths=1)
     ax.add_collection(lc)
 
@@ -386,6 +358,18 @@ def plot_3d(G, path=None):
         lc2 = art3d.Line3DCollection(paths, colors='green', linewidths=3)
         ax.add_collection(lc2)
 
+        path_arm_edges = []
+
+        for i in range(0, len(path)):
+            xdata.append(path[i].joint_positions[0][0])
+            ydata.append(path[i].joint_positions[0][1])
+            zdata.append(path[i].joint_positions[0][2])
+
+            path_arm_edges.append(([0, 0, 0], path[i].joint_positions[0]))
+            path_arm_edges.append((path[i].joint_positions[0], path[i].joint_positions[1]))
+
+        lc3 = art3d.Line3DCollection(path_arm_edges, colors='red', linewidths=1)
+        ax.add_collection(lc3)
     ax.scatter3D(xdata, ydata, zdata, c=None)
     ax.scatter3D(G.start_node.end_effector_pos[0], G.start_node.end_effector_pos[1], G.start_node.end_effector_pos[2], c='black')
     ax.scatter3D(G.end_node.end_effector_pos[0], G.end_node.end_effector_pos[1], G.end_node.end_effector_pos[2], c='black')
@@ -394,24 +378,6 @@ def plot_3d(G, path=None):
     ax.set_ylim3d(-.3, .3)
     ax.set_zlim3d(-.3, .3)
 
-    plt.show()
-
-
-def plot_random_points(num):
-    """ Plots [num] random points from random angle configurations """
-    ax = plt.axes(projection='3d')
-    points = []
-    for i in range(0, num):
-        angles = six_random_angles()
-        end_pos = RRTNode(angles).end_effector_pos
-        end_pos = arr_to_int(end_pos)
-        points.append(end_pos)
-
-    xdata = [x for x, y, z in points]
-    ydata = [y for x, y, z in points]
-    zdata = [z for x, y, z in points]
-
-    ax.scatter3D(xdata, ydata, zdata, c=zdata, cmap='Blues');
     plt.show()
 
 
@@ -447,10 +413,18 @@ def converge_test(graphs):
     return num_success
 
 
+def show_angle_config(G):
+    angles = np.array(G.end_node.angles)
+
+    visualization.show(angles[1], angles[0], angles[3],
+                       angles[2], G.end_node.end_effector_pos[0], G.end_node.end_effector_pos[1],
+                       G.end_node.end_effector_pos[2])
+    visualization.show_plot()
+
 if __name__ == '__main__':
 
     startpos = (0., 0., 0., 0., 0., 0.)
-    endpos = (2., 2., 2., 2., 2., 2.)
+    endpos = (2., 3., 2., 2., 2., 2.)
 
     obstacles = [(1., 1.), (2., 2.)]
     n_iter = 200
@@ -464,6 +438,7 @@ if __name__ == '__main__':
         path = dijkstra(G)
         print("\nTime taken: ", (time.time() - start_time))
         plot_3d(G, path)
+        # show_angle_config(G)
     else:
         print("\nTime taken: ", (time.time() - start_time))
         print("Path not found. :(")
@@ -473,5 +448,7 @@ if __name__ == '__main__':
     #
     # print("Average nodes generated: ", avg_nodes_test(graphs))
     # print("Num. successes: ", converge_test(graphs))
-
+    # total_time = time.time() - start_time
+    # print("Time taken: ", total_time)
+    # print("Average time per graph: ", total_time / 500)
 
