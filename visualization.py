@@ -15,14 +15,18 @@ origin = [0, 0, 0]
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
 
-def show(theta_1, phi_1, theta_2, phi_2, x, y, z):
+def joint_positions(theta_1, phi_1, theta_2, phi_2):
         shoulder_coord = [r_1 * np.sin(theta_1) * np.cos(phi_1), r_1 *
                           np.sin(theta_1) * np.sin(phi_1), r_1 * np.cos(theta_1)]
         elbow_coord = [r_2 * np.sin(theta_2) * np.cos(phi_2), r_2 *
                        np.sin(theta_2) * np.sin(phi_2), r_2 * np.cos(theta_2)]
+
+        return shoulder_coord, elbow_coord
+
+def show(theta_1, phi_1, theta_2, phi_2, x, y, z):
+        shoulder_coord, elbow_coord = joint_positions(theta_1, phi_1, theta_2, phi_2)
+
         point_to_reach = [x, y, z]
-
-
 
         X = [origin[0], shoulder_coord[0], elbow_coord[0]]
         Y = [origin[1], shoulder_coord[1], elbow_coord[1]]
@@ -31,7 +35,7 @@ def show(theta_1, phi_1, theta_2, phi_2, x, y, z):
 
         ax.plot(X, Y, Z)
         ax.scatter(point_to_reach[0], point_to_reach[1], point_to_reach[2], c='green')
-        ax.scatter(origin[0], origin[1], origin[2], c='red')
+        ax.scatter(origin[0], origin[1], origin[2], c='blue')
         ax.scatter(shoulder_coord[0], shoulder_coord[1], shoulder_coord[2], c='red')
         ax.scatter(elbow_coord[0], elbow_coord[1], elbow_coord[2], c='red')
         # ax.text(origin[0], origin[1], origin[2], 'Shoulder', 'x', color='red')
