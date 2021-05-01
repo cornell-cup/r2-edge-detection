@@ -385,7 +385,6 @@ def temp_valid_configuration(a1, a2, a3, a4, a5, a6):
            (a5 + 360) % 360, (a6 + 360) % 360]
 
 
-
 if __name__ == '__main__':
     startpos = (0., 0., 0., 0., 0., 0.)
     endpos = (5., 5., 5., 5., 5., 5.)
@@ -428,9 +427,10 @@ if __name__ == '__main__':
                         G = RRT(i, k, obstacles, n_iter, radius, radius)
                     path = dijkstra(G)
                     finalUpdates = finalUpdates[0:updates.index[i]-1] + path + finalUpdates[updates.index[k]+1:]
-                    
+
     for u in finalUpdates:
         print(u)
+    plot_3d(g, obstacles, radius, path)
     # start_time = time.time()
     # # G = RRT_star(startpos, endpos, obstacles, n_iter, radius, stepSize)
     # G = RRT(startpos, endpos, obstacles, n_iter, radius, stepSize)
