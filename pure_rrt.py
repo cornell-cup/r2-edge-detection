@@ -12,8 +12,8 @@ from mpl_toolkits import mplot3d
 from matplotlib import collections as mc
 from collections import deque
 from mpl_toolkits.mplot3d import art3d
-from .kinematics import FK
-from .rrt import valid_configuration
+from kinematics import FK
+from rrt import valid_configuration
 import time
 
 class Line:
