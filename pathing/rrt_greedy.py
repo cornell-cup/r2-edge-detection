@@ -4,16 +4,17 @@ Copyright (c) 2019 Fanjin Zeng
 This work is licensed under the terms of the MIT license, see <https://opensource.org/licenses/MIT>.
 """
 import math
+from builtins import float, min, enumerate, object, len, range, list
+from math import dist
 
 import numpy as np
 from random import random
 import matplotlib.pyplot as plt
-from mpl_toolkits import mplot3d
 from matplotlib import collections as mc
 from collections import deque
 from mpl_toolkits.mplot3d import art3d
-from .kinematics import FK
-from .rrt import valid_configuration
+from spatial_hashing import SpatialHash
+from pathing.rrt import valid_configuration
 import time
 
 class Line:
@@ -85,27 +86,47 @@ def nearest(G, vex, obstacles, radius):
     return Nvex, Nidx
 
 
-def explorable(contenders, min_dist, min_node, goal_node, step_size):
+def explorable(contenders, min_dist, min_node, goal_node, step_size, has_seen):
     if not contenders:
-        print("No more contenders")
         return min_node
+
     explorable_nodes = []
     for node in contenders:
+        has_seen.append(node)
         new_dist = distance(node, goal_node)
-        if new_dist <= min_dist + step_size/2:
-            explorable_nodes.append(node)
         if new_dist <= min_dist:
+            explorable_nodes.append(node)
             min_node = node
             min_dist = distance(node, goal_node)
-    new_contenders = []
-    for exp_node in explorable_nodes:
-        new_contenders += exp_node.children
-    return explorable(new_contenders, min_dist, min_node, goal_node, step_size)
+
+    new_contenders = [exp_node.neighbors for exp_node in explorable_nodes] - has_seen
+    return explorable(new_contenders, min_dist, min_node, goal_node, step_size, has_seen)
 
 
-def nearest_neighbor(G, vex, obstacles, radius):
+def nearest_greedy(G, vex, obstacles, radius):
     root = G.startpos
-    return explorable(G.children, float("inf"), None, vex, radius)
+    return explorable(G.neighbors, float("inf"), None, vex, radius, [])
+
+
+def nearest_spatial_hash(S, vex):
+    nearest_node = None
+    min_distance = float("inf")
+
+    # TODO: check if the bucket exists
+    for s in S.contents:
+        # update if one finds a nearest neighbor
+        new_d = dist(s, S.hash(vex))
+        if new_d < min_distance:
+            nearest_node = vex
+            min_distance = new_d
+
+    final_node = None
+    for t in S.contents[nearest_node]:
+        new_d = dist(s, S.hash(vex))
+        if new_d < min_distance:
+            final_node = vex
+            min_distance = new_d
+    return final_node
 
 
 def new_vertex(randvex, nearvex, stepSize):
@@ -135,12 +156,11 @@ def is_in_window(pos, winx, winy, width, height):
         return False
 
 # problem: a node is only represented by a list [x, y, z]
-# solution: use RRT node from rrt.py?
+# solution: use RRT node from pathing.py?
 # must change all references to a certain node in the RRT algorithm to new RRT node
 
 # for qrand: make angle configurations random, and call forward kinematics on that
 # for qnew: move all angles in step size epsilon towards qrand angles
-
 
 
 class RRTNode(object):
@@ -198,14 +218,12 @@ class RRTNode(object):
 
 class Graph:
     # Link lengths
-
-
     # TODO: add fields for angles of arm
     def __init__(self, startpos, endpos):
         # Cartesian coordinates
         self.startpos = startpos
         self.endpos = endpos
-
+        self.spatial_hash = SpatialHash(1.5)
         self.vertices = [startpos]
         self.edges = []
         self.success = False
@@ -232,6 +250,7 @@ class Graph:
             idx = len(self.vertices)
             self.vertices.append(pos)
             self.vex2idx[pos] = idx
+            self.spatial_hash.insert_object_for_point(pos, pos)
             self.neighbors[idx] = []
         return idx
 
@@ -264,7 +283,6 @@ def random_angle_config():
 
         if valid_configuration(a1, a2, a3, a4, a5, a6, Graph(0,0)):
             return [a1, a2, a3, a4, a5, a6]
-
     return []
 
 
@@ -274,8 +292,6 @@ def steer(qrand, qnearest, epsilon):
     new = new * (epsilon / dist)
 
     return new
-
-
 
 
 def RRT(startpos, endpos, obstacles, n_iter, radius, stepSize):
@@ -316,6 +332,7 @@ def RRT_star(startpos, endpos, obstacles, n_iter, radius, stepSize):
         if isInObstacle(randvex, obstacles, radius):
             continue
 
+        # change this line to determine which nearest neighbor algorithm to use!!!
         nearvex, nearidx = nearest(G, randvex, obstacles, radius)
         if nearvex is None:
             continue
@@ -440,7 +457,7 @@ def plot_3d(G, obstacles, radius, path=None):
 
     if path is not None:
         paths = [(path[i], path[i + 1]) for i in range(len(path) - 1)]
-        lc2 = art3d.Line3DCollection(paths, colors='green', linewidths=3)
+        lc2 = art3d.Line3DCollection(paths, colors='red', linewidths=3)
         ax.add_collection(lc2)
 
     ax.scatter3D(xdata, ydata, zdata, c=zdata, cmap='Blues');
@@ -459,18 +476,21 @@ if __name__ == '__main__':
     startpos = (0., 0., 0.)
     endpos = (5., 5., 5.)
     obstacles = [(1., 1.), (2., 2.)]
-    n_iter = 200
-    radius = 0.7
-    stepSize = 0.7
+    n_iter = 800
+    radius = 0.5
+    stepSize = 0.5
 
     start_time = time.time()
     # G = RRT_star(startpos, endpos, obstacles, n_iter, radius, stepSize)
-    G = RRT(startpos, endpos, obstacles, n_iter, radius, stepSize)
 
-    if G.success:
-        path = dijkstra(G)
-        print(path)
-        plot_3d(G, obstacles, radius, path)
-    else:
-        plot_3d(G, obstacles, radius)
+    for i in range(10):
+        G = RRT(startpos, endpos, obstacles, n_iter, radius, stepSize)
+        if G.success:
+            path = dijkstra(G)
+            print(path)
+        #
+        #     plot_3d(G, obstacles, radius, path)
+        # else:
+        #     plot_3d(G, obstacles, radius)
     print("\nTime taken: ", (time.time()-start_time))
+

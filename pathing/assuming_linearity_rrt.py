@@ -8,13 +8,11 @@ from builtins import float, min, enumerate, object, len, range, list, tuple, map
 import numpy as np
 from random import random
 import matplotlib.pyplot as plt
-from mpl_toolkits import mplot3d
-from matplotlib import collections as mc
 from collections import deque
 from mpl_toolkits.mplot3d import art3d
 from kinematics import FK
 from rrt import valid_configuration
-import time
+
 
 class Line:
     def __init__(self, p0, p1):
@@ -112,7 +110,7 @@ def is_in_window(pos, winx, winy, width, height):
         return False
 
 # problem: a node is only represented by a list [x, y, z]
-# solution: use RRT node from rrt.py?
+# solution: use RRT node from pathing.py?
 # must change all references to a certain node in the RRT algorithm to new RRT node
 
 # for qrand: make angle configurations random, and call forward kinematics on that
