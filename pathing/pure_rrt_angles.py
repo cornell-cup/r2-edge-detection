@@ -4,6 +4,7 @@ Copyright (c) 2019 Fanjin Zeng
 This work is licensed under the terms of the MIT license, see <https://opensource.org/licenses/MIT>.
 """
 import math
+from itertools import combinations, product
 
 import numpy as np
 from random import random
@@ -14,6 +15,7 @@ from kinematics import FK
 import time
 import random
 import visualization
+import collision_detection
 
 
 class Line:
@@ -27,54 +29,25 @@ class Line:
         return self.p + t * self.dirn
 
 
-def intersection(line, center, radius):
-    """ Check line-sphere (circle) intersection """
-    a = np.dot(line.dirn, line.dirn)
-    b = 2 * np.dot(line.dirn, line.p - center)
-    c = np.dot(line.p - center, line.p - center) - radius * radius
-
-    discriminant = b * b - 4 * a * c
-    if discriminant < 0:
-        return False
-
-    t1 = (-b + np.sqrt(discriminant)) / (2 * a);
-    t2 = (-b - np.sqrt(discriminant)) / (2 * a);
-
-    if (t1 < 0 and t2 < 0) or (t1 > line.dist and t2 > line.dist):
-        return False
-
-    return True
-
-
 def distance(x, y):
     return np.linalg.norm(np.array(x) - np.array(y))
 
 
-# TODO: Modify the below methods to work with manifolds representing obstacles
-def isInObstacle(vex, obstacles, radius):
-    # for obs in obstacles:
-        # if distance(obs, vex) < radius:
-            # return True
+def arm_is_colliding(node, obstacles):
+    arm = node.to_nlinkarm()
+    arm.get_points()
+    for obs in obstacles:
+        if collision_detection.arm_is_colliding(arm, obs):
+            return True
     return False
 
 
-def isThruObstacle(line, obstacles, radius):
-    # for obs in obstacles:
-        # if Intersection(line, obs, radius):
-            # return True
-    return False
-
-
-def nearest(G, node, obstacles, radius):
+def nearest(G, node):
     new_node = None
     new_node_index = None
     min_dist = float("inf")
 
     for idx, v in enumerate(G.nodes):
-        line = Line(v.end_effector_pos, node)
-        if isThruObstacle(line, obstacles, radius):
-            continue
-
         dist = distance(v.end_effector_pos, node)
         if dist < min_dist:
             min_dist = dist
@@ -82,29 +55,6 @@ def nearest(G, node, obstacles, radius):
             new_node = v
 
     return new_node, new_node_index
-
-
-def explorable(contenders, min_dist, min_node, goal_node, step_size):
-    if not contenders:
-        print("No more contenders")
-        return min_node
-    explorable_nodes = []
-    for node in contenders:
-        new_dist = distance(node, goal_node)
-        if new_dist <= min_dist + step_size/2:
-            explorable_nodes.append(node)
-        if new_dist <= min_dist:
-            min_node = node
-            min_dist = distance(node, goal_node)
-    new_contenders = []
-    for exp_node in explorable_nodes:
-        new_contenders += exp_node.children
-    return explorable(new_contenders, min_dist, min_node, goal_node, step_size)
-
-
-def nearest_neighbor(G, node, obstacles, radius):
-    root = G.start_node
-    return explorable(G.children, float("inf"), None, node, radius)
 
 
 def steer(rand_angles, near_angles, step_size):
@@ -118,14 +68,26 @@ def steer(rand_angles, near_angles, step_size):
     return RRTNode(new_angles)
 
 
-def new_vertex(randvex, nearvex, stepSize):
-    """ Generates a new node based on cartesian coordinates. """
-    dirn = np.array(randvex) - np.array(nearvex)
-    length = np.linalg.norm(dirn)
-    dirn = (dirn / length) * min(stepSize, length)
+def extend_heuristic(G, rand_node, step_size, threshold, obstacles):
+    """ Extends RRT T from the highest ranked node, in the direction of [rand_node]. """
+    near_node = G.ranking[0]
+    new_node = steer(rand_node.angles, near_node.angles, step_size)
 
-    newvex = (nearvex[0] + dirn[0], nearvex[1] + dirn[1], nearvex[2] + dirn[2])
-    return newvex
+    if G.dist_to_end(new_node) < G.dist_to_end(near_node) and not arm_is_colliding(new_node, obstacles):
+        G.add_vex(new_node)
+        dist = distance(new_node.end_effector_pos, near_node.end_effector_pos)
+        G.add_edge(G.node_to_index[near_node], G.node_to_index[new_node], dist)
+        return new_node, G.node_to_index[new_node]
+
+    near_node.inc_fail_count()
+    near_idx = G.node_to_index[near_node]
+    if near_node.fail_count > threshold:
+        G.ranking.remove(near_node)
+
+        parent = G.get_parent(near_idx)
+        parent.inc_fail_count()
+
+    return near_node, near_idx
 
 
 class RRTNode(object):
@@ -144,14 +106,16 @@ class RRTNode(object):
     Instance Attributes:
         end_effector_pos [np array] : [x, y, z] of the end effector.
         angles           [np array] : list of joint angles in radians. [a1 ... a6].
+        fail_count        [int]      : amount of times extension heuristic has failed from this node.
     """
 
     def __init__(self, configuration):
         self.angles = configuration
         self.joint_positions = self.generate_joint_positions()
         self.end_effector_pos = self.joint_positions[1]
+        self.fail_count = 0
 
-    def forward_kinematics(self):
+    def forward_kinematics(self, link_lengths):
         """ Returns the [x, y, z] corresponding the node's angle configuration. """
 
         angles = np.array([[0], [self.angles[1]], [0], [self.angles[0]], [0]])
@@ -163,6 +127,17 @@ class RRTNode(object):
     def generate_joint_positions(self):
         """ Returns the [x, y, z] of the two joints based on the node's angle configuration. """
         return visualization.joint_positions(*self.angles[0:4])
+
+    def to_nlinkarm(self):
+        """ Creates an instance of NLinkArm using the angle configuration. """
+        arm = collision_detection.NLinkArm(2)
+        arm.update_pitch([self.angles[0], self.angles[2]])
+        arm.update_yaw([self.angles[1], self.angles[3]])
+
+        return arm
+
+    def inc_fail_count(self):
+        self.fail_count = self.fail_count + 1
 
 
 class Graph:
@@ -184,6 +159,7 @@ class Graph:
         node_to_index: Maps nodes to indexes that are used to find the distance from start_node of each node.
         neighbors: Maps each node to its neighbors.
         distances: Maps each node to its shortest known distance from the start node.
+        ranking: List of all intermediate nodes, ordered by distance between the end effector to the target position.
 
         sx, sy, sz: The distance between the start and end nodes.
     """
@@ -198,6 +174,7 @@ class Graph:
         self.node_to_index = {self.start_node: 0}
         self.neighbors = {0: []}
         self.distances = {0: 0.}
+        self.ranking = []
 
         self.sx = endpos[0] - startpos[0]
         self.sy = endpos[1] - startpos[1]
@@ -211,12 +188,23 @@ class Graph:
             self.nodes.append(node)
             self.node_to_index[node] = idx
             self.neighbors[idx] = []
+            self.ranking.append(node)
+            self.ranking.sort(key=lambda n: self.dist_to_end(n))
         return idx
 
     def add_edge(self, idx1, idx2, cost):
         self.edges.append((idx1, idx2))
         self.neighbors[idx1].append((idx2, cost))
         self.neighbors[idx2].append((idx1, cost))
+
+    def dist_to_end(self, node):
+        return distance(node.end_effector_pos, self.end_node.end_effector_pos)
+
+    def get_parent(self, idx):
+        near_neighbors = self.neighbors[idx]
+        parent_idx = near_neighbors[0][0]
+        node_list = list(self.node_to_index.keys())
+        return node_list[parent_idx]
 
 
 def valid_configuration(a1, a2, a3, a4, a5, a6):
@@ -242,7 +230,8 @@ def random_angle_config(goal_angles, angle_range, i, amt_iter):
 
     while True:
         for a in range(0, 6):
-            rand_angles[a] = (random.random() * 2 - 1) * bias * angle_range + goal_angles[a]
+            # rand_angles[a] = (random.random() * 2 - 1) * bias * angle_range + goal_angles[a]
+            rand_angles[a] = (random.random() * 2 - 1) * 2 * np.pi
 
         if valid_configuration(rand_angles[0], rand_angles[1], rand_angles[2], rand_angles[3],
                                rand_angles[4], rand_angles[5]):
@@ -251,35 +240,42 @@ def random_angle_config(goal_angles, angle_range, i, amt_iter):
     return rand_angles
 
 
-def rrt(start_angles, end_angles, obstacles, n_iter, radius, stepSize):
+def rrt(start_angles, end_angles, obstacles, n_iter, radius, stepSize, threshold):
 
     G = Graph(start_angles, end_angles)
 
     for i in range(n_iter):
         rand_node = RRTNode(random_angle_config(end_angles, math.pi, i, n_iter))
-        if isInObstacle(rand_node, obstacles, radius):
+        if arm_is_colliding(rand_node, obstacles):
             continue
 
-        nearest_node, nearest_node_index = nearest(G, rand_node.end_effector_pos, obstacles, radius)
-        if nearest_node is None:
-            continue
+        if i % 2 == 0 or G.ranking == []:
+            nearest_node, nearest_node_index = nearest(G, rand_node.end_effector_pos)
+            if nearest_node is None:
+                continue
 
-        new_node = steer(rand_node.angles, nearest_node.angles, stepSize)
+            new_node = steer(rand_node.angles, nearest_node.angles, stepSize)
 
-        nearest_to_new, nearest_to_new_idx = nearest(G, new_node.end_effector_pos, obstacles, radius)
+            if arm_is_colliding(new_node, obstacles):
+                continue
 
-        newidx = G.add_vex(new_node)
-        dist = distance(new_node.end_effector_pos, nearest_to_new.end_effector_pos)
-        G.add_edge(newidx, nearest_to_new_idx, dist)
+            nearest_to_new, nearest_to_new_idx = nearest(G, new_node.end_effector_pos)
+
+            newidx = G.add_vex(new_node)
+            dist = distance(new_node.end_effector_pos, nearest_to_new.end_effector_pos)
+            G.add_edge(newidx, nearest_to_new_idx, dist)
+
+        else:
+            new_node, newidx = extend_heuristic(G, rand_node, stepSize, threshold, obstacles)
 
         dist_to_goal = distance(new_node.end_effector_pos, G.end_node.end_effector_pos)
 
-        if dist_to_goal < 2 * radius:
+        if dist_to_goal < 2 * radius and not G.success:
             endidx = G.add_vex(G.end_node)
             G.add_edge(newidx, endidx, dist_to_goal)
             G.success = True
             # print('success')
-            # break
+            break
 
     return G
 
@@ -328,51 +324,32 @@ def arr_to_int(arr):
     return new_array
 
 
+# TODO: refactor this monstrosity
 def plot_3d(G, path=None):
-    print(len(path))
     ax = plt.axes(projection='3d')
+
     end_effector_positions = []
     for v in G.nodes:
         end_effector_positions.append(v.end_effector_pos)
-
     float_vertices = list(map(arr_to_int, end_effector_positions))
-    intermediate_vertices = []
-    for i in range(1, len(float_vertices) - 1):
-        intermediate_vertices.append(float_vertices[i])
 
-    xdata = [x for x, y, z in intermediate_vertices]
-    ydata = [y for x, y, z in intermediate_vertices]
-    zdata = [z for x, y, z in intermediate_vertices]
+    plot_edges(ax, G, float_vertices)
 
-    lines = [(float_vertices[edge[0]], float_vertices[edge[1]]) for edge in G.edges]
-
-    lc = art3d.Line3DCollection(lines, colors='black', linewidths=1)
-    ax.add_collection(lc)
+    plot_nodes(ax, float_vertices)
 
     if path is not None:
-        path_vertices = []
-        for i in range(0, len(path)):
-            path_vertices.append(path[i].end_effector_pos)
-        path_vertices = list(map(arr_to_int, path_vertices))
-        paths = [(path_vertices[i], path_vertices[i + 1]) for i in range(len(path_vertices) - 1)]
-        lc2 = art3d.Line3DCollection(paths, colors='green', linewidths=3)
-        ax.add_collection(lc2)
+        plot_path(ax, path)
 
-        path_arm_edges = []
-
-        for i in range(0, len(path)):
-            xdata.append(path[i].joint_positions[0][0])
-            ydata.append(path[i].joint_positions[0][1])
-            zdata.append(path[i].joint_positions[0][2])
-
-            path_arm_edges.append(([0, 0, 0], path[i].joint_positions[0]))
-            path_arm_edges.append((path[i].joint_positions[0], path[i].joint_positions[1]))
-
-        lc3 = art3d.Line3DCollection(path_arm_edges, colors='red', linewidths=1)
-        ax.add_collection(lc3)
-    ax.scatter3D(xdata, ydata, zdata, c=None)
     ax.scatter3D(G.start_node.end_effector_pos[0], G.start_node.end_effector_pos[1], G.start_node.end_effector_pos[2], c='black')
     ax.scatter3D(G.end_node.end_effector_pos[0], G.end_node.end_effector_pos[1], G.end_node.end_effector_pos[2], c='black')
+
+    # obstacles
+    for obs in obstacles:
+        collision_detection.plot_linear_cube(ax, obs)
+
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
 
     ax.set_xlim3d(-.3, .3)
     ax.set_ylim3d(-.3, .3)
@@ -381,11 +358,50 @@ def plot_3d(G, path=None):
     plt.show()
 
 
-def rrt_graph_list(num_trials, startpos, endpos, n_iter, radius, step_size):
+def plot_nodes(ax, float_vertices):
+    intermediate_vertices = []
+    for i in range(1, len(float_vertices) - 1):
+        intermediate_vertices.append(float_vertices[i])
+
+    xdata = [x for x, y, z in intermediate_vertices]
+    ydata = [y for x, y, z in intermediate_vertices]
+    zdata = [z for x, y, z in intermediate_vertices]
+
+    ax.scatter3D(xdata, ydata, zdata, c=None)
+
+
+def plot_edges(ax, G, float_vertices):
+    lines = [(float_vertices[edge[0]], float_vertices[edge[1]]) for edge in G.edges]
+
+    lc = art3d.Line3DCollection(lines, colors='black', linewidths=1)
+    ax.add_collection(lc)
+
+
+def plot_path(ax, path):
+    path_vertices = []
+    for i in range(0, len(path)):
+        path_vertices.append(path[i].end_effector_pos)
+    path_vertices = list(map(arr_to_int, path_vertices))
+    paths = [(path_vertices[i], path_vertices[i + 1]) for i in range(len(path_vertices) - 1)]
+    lc2 = art3d.Line3DCollection(paths, colors='green', linewidths=3)
+    ax.add_collection(lc2)
+
+    path_arm_edges = []
+
+    for i in range(0, len(path)):
+        path_arm_edges.append(([0, 0, 0], path[i].joint_positions[0]))
+        path_arm_edges.append((path[i].joint_positions[0], path[i].joint_positions[1]))
+
+    lc3 = art3d.Line3DCollection(path_arm_edges, colors='green', linewidths=1)
+    ax.add_collection(lc3)
+
+
+def rrt_graph_list(num_trials, startpos, endpos, n_iter, radius, step_size, threshold):
     """ Generates a list of RRT graphs. """
     graphs = []
-    for _ in range(0, num_trials):
-        G = rrt(startpos, endpos, [], n_iter, radius, step_size)
+    for i in range(0, num_trials):
+        print("Trial: ", i)
+        G = rrt(startpos, endpos, [], n_iter, radius, step_size, threshold)
         graphs.append(G)
 
     return graphs
@@ -421,34 +437,35 @@ def show_angle_config(G):
                        G.end_node.end_effector_pos[2])
     visualization.show_plot()
 
+
 if __name__ == '__main__':
 
     startpos = (0., 0., 0., 0., 0., 0.)
-    endpos = (2., 3., 2., 2., 2., 2.)
+    endpos = (-2., -3., -2., -2., -2., -2.)
 
-    obstacles = [(1., 1.), (2., 2.)]
+    obstacles = []
     n_iter = 200
     radius = 0.04
     stepSize = .7
-
+    threshold = 2
     start_time = time.time()
-    G = rrt(startpos, endpos, obstacles, n_iter, radius, stepSize)
+    G = rrt(startpos, endpos, obstacles, n_iter, radius, stepSize, threshold)
 
-    if G.success:
-        path = dijkstra(G)
-        print("\nTime taken: ", (time.time() - start_time))
-        plot_3d(G, path)
-        # show_angle_config(G)
-    else:
-        print("\nTime taken: ", (time.time() - start_time))
-        print("Path not found. :(")
-        plot_3d(G, [])
+    # if G.success:
+    #     path = dijkstra(G)
+    #     print("\nTime taken: ", (time.time() - start_time))
+    #     plot_3d(G, path)
+    #     # show_angle_config(G)
+    # else:
+    #     print("\nTime taken: ", (time.time() - start_time))
+    #     print("Path not found. :(")
+    #     plot_3d(G, [])
 
-    # graphs = rrt_graph_list(500, startpos, endpos, n_iter, radius, stepSize)
-    #
-    # print("Average nodes generated: ", avg_nodes_test(graphs))
-    # print("Num. successes: ", converge_test(graphs))
-    # total_time = time.time() - start_time
-    # print("Time taken: ", total_time)
-    # print("Average time per graph: ", total_time / 500)
+    graphs = rrt_graph_list(500, startpos, endpos, n_iter, radius, stepSize, threshold)
+
+    print("Average nodes generated: ", avg_nodes_test(graphs))
+    print("Num. successes: ", converge_test(graphs))
+    total_time = time.time() - start_time
+    print("Time taken: ", total_time)
+    print("Average time per graph: ", total_time / 500)
 
