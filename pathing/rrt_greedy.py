@@ -111,6 +111,8 @@ def nearest_greedy(G, vex, obstacles, radius):
 def nearest_spatial_hash(S, vex):
     nearest_node = None
     min_distance = float("inf")
+
+    # TODO: check if the bucket exists
     for s in S.contents:
         # update if one finds a nearest neighbor
         new_d = dist(s, S.hash(vex))
