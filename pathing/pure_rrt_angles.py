@@ -1,17 +1,15 @@
 """
-MIT License
-Copyright (c) 2019 Fanjin Zeng
-This work is licensed under the terms of the MIT license, see <https://opensource.org/licenses/MIT>.
+Written by Simon Kapen and Alison Duan.
+Adapted from Fanjin Zeng on github, 2019.
 """
-import math
-from itertools import combinations, product
 
+import math
 import numpy as np
 from random import random
 import matplotlib.pyplot as plt
 from collections import deque
 from mpl_toolkits.mplot3d import art3d
-from kinematics import FK
+from kinematics import FK, kinematics
 import time
 import random
 import visualization
@@ -33,9 +31,21 @@ def distance(x, y):
     return np.linalg.norm(np.array(x) - np.array(y))
 
 
+def point_is_colliding(node, obstacles):
+    for obs in obstacles:
+        colliding_x = obs[0] <= node.end_effector_pos[0] <= obs[0] + obs[3]
+        colliding_y = obs[1] <= node.end_effector_pos[1] <= obs[1] + obs[3]
+        colliding_z = obs[2] <= node.end_effector_pos[2] <= obs[2] + obs[3]
+
+        if colliding_x and colliding_y and colliding_z:
+            return True
+
+    return False
+
+
 def arm_is_colliding(node, obstacles):
     arm = node.to_nlinkarm()
-    arm.get_points()
+
     for obs in obstacles:
         if collision_detection.arm_is_colliding(arm, obs):
             return True
@@ -43,6 +53,8 @@ def arm_is_colliding(node, obstacles):
 
 
 def nearest(G, node):
+    """ Finds the nearest node to [node] in cartesian space. """
+
     new_node = None
     new_node_index = None
     min_dist = float("inf")
@@ -59,6 +71,7 @@ def nearest(G, node):
 
 def steer(rand_angles, near_angles, step_size):
     """ Generates a new node based on the random node and the nearest node. """
+
     dirn = np.array(rand_angles) - np.array(near_angles)
     length = np.linalg.norm(dirn)
     dirn = (dirn / length) * min(step_size, length)
@@ -69,14 +82,18 @@ def steer(rand_angles, near_angles, step_size):
 
 
 def extend_heuristic(G, rand_node, step_size, threshold, obstacles):
-    """ Extends RRT T from the highest ranked node, in the direction of [rand_node]. """
+    """ Extends RRT T from the node closest to the end node, in the direction of [rand_node]. If the node
+        being extended from has failed too many times (generates an colliding configuration or does not get closer
+        to the end node), it is removed from the ranking."""
     near_node = G.ranking[0]
     new_node = steer(rand_node.angles, near_node.angles, step_size)
 
     if G.dist_to_end(new_node) < G.dist_to_end(near_node) and not arm_is_colliding(new_node, obstacles):
-        G.add_vex(new_node)
-        dist = distance(new_node.end_effector_pos, near_node.end_effector_pos)
-        G.add_edge(G.node_to_index[near_node], G.node_to_index[new_node], dist)
+        nearest_to_new, nearest_to_new_idx = nearest(G, new_node.end_effector_pos)
+
+        newidx = G.add_vex(new_node)
+        dist = distance(new_node.end_effector_pos, nearest_to_new.end_effector_pos)
+        G.add_edge(newidx, nearest_to_new_idx, dist)
         return new_node, G.node_to_index[new_node]
 
     near_node.inc_fail_count()
@@ -130,7 +147,7 @@ class RRTNode(object):
 
     def to_nlinkarm(self):
         """ Creates an instance of NLinkArm using the angle configuration. """
-        arm = collision_detection.NLinkArm(2)
+        arm = collision_detection.NLinkArm(2, [.222, .3])
         arm.update_pitch([self.angles[0], self.angles[2]])
         arm.update_yaw([self.angles[1], self.angles[3]])
 
@@ -235,6 +252,7 @@ def random_angle_config(goal_angles, angle_range, i, amt_iter):
 
         if valid_configuration(rand_angles[0], rand_angles[1], rand_angles[2], rand_angles[3],
                                rand_angles[4], rand_angles[5]):
+
             return rand_angles
 
     return rand_angles
@@ -267,6 +285,8 @@ def rrt(start_angles, end_angles, obstacles, n_iter, radius, stepSize, threshold
 
         else:
             new_node, newidx = extend_heuristic(G, rand_node, stepSize, threshold, obstacles)
+            if arm_is_colliding(new_node, obstacles):
+                continue
 
         dist_to_goal = distance(new_node.end_effector_pos, G.end_node.end_effector_pos)
 
@@ -324,13 +344,15 @@ def arr_to_int(arr):
     return new_array
 
 
-# TODO: refactor this monstrosity
 def plot_3d(G, path=None):
     ax = plt.axes(projection='3d')
 
     end_effector_positions = []
     for v in G.nodes:
+        if arm_is_colliding(v, obstacles):
+            print("colliding")
         end_effector_positions.append(v.end_effector_pos)
+
     float_vertices = list(map(arr_to_int, end_effector_positions))
 
     plot_edges(ax, G, float_vertices)
@@ -339,6 +361,7 @@ def plot_3d(G, path=None):
 
     if path is not None:
         plot_path(ax, path)
+        plot_arm_configs(ax, path)
 
     ax.scatter3D(G.start_node.end_effector_pos[0], G.start_node.end_effector_pos[1], G.start_node.end_effector_pos[2], c='black')
     ax.scatter3D(G.end_node.end_effector_pos[0], G.end_node.end_effector_pos[1], G.end_node.end_effector_pos[2], c='black')
@@ -351,9 +374,9 @@ def plot_3d(G, path=None):
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
 
-    ax.set_xlim3d(-.3, .3)
+    ax.set_xlim3d(-.3, .35)
     ax.set_ylim3d(-.3, .3)
-    ax.set_zlim3d(-.3, .3)
+    ax.set_zlim3d(-.3, .4)
 
     plt.show()
 
@@ -386,8 +409,9 @@ def plot_path(ax, path):
     lc2 = art3d.Line3DCollection(paths, colors='green', linewidths=3)
     ax.add_collection(lc2)
 
-    path_arm_edges = []
 
+def plot_arm_configs(ax, path):
+    path_arm_edges = []
     for i in range(0, len(path)):
         path_arm_edges.append(([0, 0, 0], path[i].joint_positions[0]))
         path_arm_edges.append((path[i].joint_positions[0], path[i].joint_positions[1]))
@@ -429,43 +453,44 @@ def converge_test(graphs):
     return num_success
 
 
-def show_angle_config(G):
-    angles = np.array(G.end_node.angles)
-
-    visualization.show(angles[1], angles[0], angles[3],
-                       angles[2], G.end_node.end_effector_pos[0], G.end_node.end_effector_pos[1],
-                       G.end_node.end_effector_pos[2])
-    visualization.show_plot()
-
-
 if __name__ == '__main__':
 
     startpos = (0., 0., 0., 0., 0., 0.)
-    endpos = (-2., -3., -2., -2., -2., -2.)
 
-    obstacles = []
+    x, y, z = (.2, -.2, -.2)
+
+    angles = [round(x[0], 2) for x in kinematics(x, y, z).tolist()]
+
+    endpos = (math.radians(angles[1]), math.radians(angles[0]), math.radians(angles[3]), math.radians(angles[2]), 0, 0)
+    # print("angle 1: ", math.radians(angles[1]))
+    # print("angle 2: ", math.radians(angles[0]))
+    # print("angle 3: ", math.radians(angles[3]))
+    # print("angle 4: ", math.radians(angles[2]))
+    # endpos = (1, 1, 0, 1, 0, 0)
+
+    obstacles = [[0.1, -0.1, 0, 0.2]]
     n_iter = 200
-    radius = 0.04
-    stepSize = .7
+    radius = 0.05
+    stepSize = .5
     threshold = 2
     start_time = time.time()
+    print("RRT started")
     G = rrt(startpos, endpos, obstacles, n_iter, radius, stepSize, threshold)
 
-    # if G.success:
-    #     path = dijkstra(G)
-    #     print("\nTime taken: ", (time.time() - start_time))
-    #     plot_3d(G, path)
-    #     # show_angle_config(G)
-    # else:
-    #     print("\nTime taken: ", (time.time() - start_time))
-    #     print("Path not found. :(")
-    #     plot_3d(G, [])
+    if G.success:
+        path = dijkstra(G)
+        print("\nTime taken: ", (time.time() - start_time))
+        plot_3d(G, path)
+    else:
+        print("\nTime taken: ", (time.time() - start_time))
+        print("Path not found. :(")
+        plot_3d(G, [])
 
-    graphs = rrt_graph_list(500, startpos, endpos, n_iter, radius, stepSize, threshold)
-
-    print("Average nodes generated: ", avg_nodes_test(graphs))
-    print("Num. successes: ", converge_test(graphs))
-    total_time = time.time() - start_time
-    print("Time taken: ", total_time)
-    print("Average time per graph: ", total_time / 500)
+    # graphs = rrt_graph_list(500, startpos, endpos, n_iter, radius, stepSize, threshold)
+    #
+    # print("Average nodes generated: ", avg_nodes_test(graphs))
+    # print("Num. successes: ", converge_test(graphs))
+    # total_time = time.time() - start_time
+    # print("Time taken: ", total_time)
+    # print("Average time per graph: ", total_time / 500)
 

@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import axes3d
 import sys
+from visualization import joint_positions
 
 """****************************************************************************
 A script to configure a robot arm and collisions (represented as cubes).
@@ -39,16 +40,16 @@ class NLinkArm(object):
                               len(points) == n_links + 1.
     """
 
-    def __init__(self, dof):
+    def __init__(self, dof, link_lengths):
         """
         Initialize a configuration of a robot arm with [dof] degrees of freedom.
         """
         self.n_links = dof
-        self.link_lengths = np.array([2 for _ in range(dof)])
+        self.link_lengths = link_lengths
         self.yaws = np.array([0. for _ in range(dof)])
         self.pitches = np.array([0. for _ in range(dof)])
         self.points = np.array([[0., 0., 0.] for _ in range(dof + 1)])
-        self.update_points()
+        self.update_points_alternate()
 
     def update_yaw(self, yaws):
         """
@@ -77,6 +78,23 @@ class NLinkArm(object):
         self.update_points()
 
     def update_points(self):
+        """
+        Redefine the points according to yaw and pitch angles, to match the method used in visualization.py
+        """
+        # def joint_positions(theta_1, phi_1, theta_2, phi_2):
+        r_1 = self.link_lengths[0]
+        r_2 = self.link_lengths[1]
+        theta_1, theta_2 = self.get_pitches()
+        phi_1, phi_2 = self.get_yaws()
+        shoulder_coord, elbow_coord = joint_positions(theta_1, phi_1, theta_2, phi_2)
+
+        self.points[1] = [r_1 * np.sin(theta_1) * np.cos(phi_1), r_1 *
+                           np.sin(theta_1) * np.sin(phi_1), r_1 * np.cos(theta_1)]
+        self.points[2] = [shoulder_coord[0] + r_2 * np.sin(theta_2) * np.cos(phi_2), shoulder_coord[1] + r_2 *
+                           np.sin(theta_2) * np.sin(phi_2), shoulder_coord[2] + r_2 * np.cos(theta_2)]
+
+
+    def update_points_alternate(self):
         """
         Redefine the points according to yaw and pitch angles.
         """
@@ -184,6 +202,8 @@ def plot_arm(ax, arm, line_label):
     line_label [str]             : label for the arm plot.
     """
     points = arm.get_points()
+    for p in points:
+        print("point", p[0], " ", p[1], " ", p[2] )
     plot_points(ax, [p[0] for p in points],
                 [p[1] for p in points], [p[2] for p in points])
     plot_lines(ax, [p[0] for p in points],
@@ -243,14 +263,16 @@ def arm_is_colliding(arm, cube):
 if __name__ == "__main__":
     fig = plt.figure()
     ax = plt.axes(projection="3d")
-    cube = [1, 1, 1, 5]
+    cube = [0.1, 0, 0, 0.2]
     plot_linear_cube(ax, cube)
-    arm = NLinkArm(6)
+    arm = NLinkArm(2, np.array([0.222, 0.3]))
+    print("points, ", len(arm.get_points()))
     if len(sys.argv) == 2 and sys.argv[1] == "rand":
         arm.update_pitch(
             [arm.get_pitches()[j] + np.random.randint(-50, 50)/100 for j in range(arm.get_dof())])
         arm.update_yaw(
             [arm.get_yaws()[j] + np.random.randint(-50, 50)/100 for j in range(arm.get_dof())])
+
         plot_arm(ax, arm, "arm")
         print("Arm is colliding:", arm_is_colliding(arm, cube))
     else:

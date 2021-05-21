@@ -157,7 +157,7 @@ def kinematics(xg,yg,zg):
 
 
     #Decrease the tolerance to increase accuracy
-    tolerance=0.001
+    tolerance=0.4
 
     # Find current position based on the current joint angles
     point = FK(angles,alpha,d,r)
