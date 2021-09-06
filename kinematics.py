@@ -173,14 +173,11 @@ def kinematics(xg,yg,zg):
 
     angles[3] = angles[3] - pi/2
 
-    print('Desired Loceation')
-    print(giv_point)
-    print('Calculated position')
-    print(point)
-    print('Accuracy')
-    print(tolerance)
-    print('Angles')
-    print(np.rad2deg(angles))
+    print('Desired Loceation: {}'.format(giv_point))
+    print('Calculated position: {}'.format(point))
+    print('Accuracy: {}'.format(tolerance))
+    print('Angles: {}'.format(np.rad2deg(angles)))
+
     # Correction for convention
     angles[1] = angles[1] + 5*pi/6
     angles[2] = -1*angles[2] + pi/4
