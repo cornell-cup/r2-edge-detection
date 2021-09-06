@@ -110,7 +110,6 @@ def extend_heuristic(G, rand_node, step_size, threshold, obstacles):
 class RRTNode(object):
     """
     A node generated in a RRT graph.
-
     Args:
         configuration: list of joint angles in radians. Corresponds to the 6 degrees of freedom on the arm.
             a1-- the lift angle of the base
@@ -119,7 +118,6 @@ class RRTNode(object):
             a4-- the pan angle of the elbow
             a5-- the pan angle of the wrist
             a6-- how big to open the end effector
-
     Instance Attributes:
         end_effector_pos [np array] : [x, y, z] of the end effector.
         angles           [np array] : list of joint angles in radians. [a1 ... a6].
@@ -160,24 +158,19 @@ class RRTNode(object):
 class Graph:
     """
     An RRT graph.
-
     Args:
         start_angles: The initial angles of the arm.
         end_angles: The desired angles of the arm.
-
     Instance Attributes:
         start_node: Node containing cartesian coordinates and arm angles of the start position.
         end_node: Node containing cartesian coordinates and arm angles of the end position.
-
         nodes: List of all nodes in the graph.
         edges: List of all pairs (n1, n2) for which there is an edge from node n1 to node n2.
         success: True if there is a valid path from start_node to end_node.
-
         node_to_index: Maps nodes to indexes that are used to find the distance from start_node of each node.
         neighbors: Maps each node to its neighbors.
         distances: Maps each node to its shortest known distance from the start node.
         ranking: List of all intermediate nodes, ordered by distance between the end effector to the target position.
-
         sx, sy, sz: The distance between the start and end nodes.
     """
     def __init__(self, start_angles, end_angles):
@@ -247,7 +240,7 @@ def random_angle_config(goal_angles, angle_range, i, amt_iter):
 
     while True:
         for a in range(0, 6):
-            # rand_angles[a] = (random.random() * 2 - 1) * bias * angle_range + goal_angles[a]
+            # Random number from -2pi to 2pi
             rand_angles[a] = (random.random() * 2 - 1) * 2 * np.pi
 
         if valid_configuration(rand_angles[0], rand_angles[1], rand_angles[2], rand_angles[3],
@@ -288,13 +281,14 @@ def rrt(start_angles, end_angles, obstacles, n_iter, radius, stepSize, threshold
             if arm_is_colliding(new_node, obstacles):
                 continue
 
-        dist_to_goal = distance(new_node.end_effector_pos, G.end_node.end_effector_pos)
+        end_eff_dist_to_goal = distance(new_node.end_effector_pos, G.end_node.end_effector_pos)
+        elbow_dist_to_goal = distance(new_node.joint_positions[0], G.end_node.joint_positions[0])
 
-        if dist_to_goal < 2 * radius and not G.success:
+        if end_eff_dist_to_goal < 2 * radius and not G.success:
             endidx = G.add_vex(G.end_node)
-            G.add_edge(newidx, endidx, dist_to_goal)
+            G.add_edge(newidx, endidx, end_eff_dist_to_goal)
             G.success = True
-            # print('success')
+            # Comment this out to run all iterations
             break
 
     return G
@@ -350,7 +344,10 @@ def plot_3d(G, path=None):
     end_effector_positions = []
     for v in G.nodes:
         if arm_is_colliding(v, obstacles):
-            print("colliding")
+            if (v == G.end_node):
+                print("End node is colliding")
+            else:
+                print("RRT-generated node is colliding")
         end_effector_positions.append(v.end_effector_pos)
 
     float_vertices = list(map(arr_to_int, end_effector_positions))
@@ -415,7 +412,6 @@ def plot_arm_configs(ax, path):
     for i in range(0, len(path)):
         path_arm_edges.append(([0, 0, 0], path[i].joint_positions[0]))
         path_arm_edges.append((path[i].joint_positions[0], path[i].joint_positions[1]))
-
     lc3 = art3d.Line3DCollection(path_arm_edges, colors='green', linewidths=1)
     ax.add_collection(lc3)
 
@@ -459,7 +455,7 @@ if __name__ == '__main__':
 
     x, y, z = (.2, -.2, -.2)
 
-    angles = [round(x[0], 2) for x in kinematics(x, y, z).tolist()]
+    angles = [round(x[0], 5) for x in kinematics(x, y, z).tolist()]
 
     endpos = (math.radians(angles[1]), math.radians(angles[0]), math.radians(angles[3]), math.radians(angles[2]), 0, 0)
     # print("angle 1: ", math.radians(angles[1]))
@@ -469,8 +465,9 @@ if __name__ == '__main__':
     # endpos = (1, 1, 0, 1, 0, 0)
 
     obstacles = [[0.1, -0.1, 0, 0.2]]
-    n_iter = 200
-    radius = 0.05
+    #obstacles = []
+    n_iter = 1000
+    radius = 0.01
     stepSize = .5
     threshold = 2
     start_time = time.time()
@@ -486,11 +483,11 @@ if __name__ == '__main__':
         print("Path not found. :(")
         plot_3d(G, [])
 
-    # graphs = rrt_graph_list(500, startpos, endpos, n_iter, radius, stepSize, threshold)
+    # trials = 50
+    # graphs = rrt_graph_list(trials, startpos, endpos, n_iter, radius, stepSize, threshold)
     #
     # print("Average nodes generated: ", avg_nodes_test(graphs))
     # print("Num. successes: ", converge_test(graphs))
     # total_time = time.time() - start_time
     # print("Time taken: ", total_time)
-    # print("Average time per graph: ", total_time / 500)
-
+    # print("Average time per graph: ", total_time / trials)
