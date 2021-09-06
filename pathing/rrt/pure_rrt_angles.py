@@ -14,21 +14,9 @@ import time
 import random
 import visualization
 import collision_detection
-
-
-class Line:
-    def __init__(self, p0, p1):
-        self.p = np.array(p0)
-        self.dirn = np.array(p1) - np.array(p0)
-        self.dist = np.linalg.norm(self.dirn)
-        self.dirn /= self.dist  # normalize
-
-    def path(self, t):
-        return self.p + t * self.dirn
-
-
-def distance(x, y):
-    return np.linalg.norm(np.array(x) - np.array(y))
+import line
+from rrtnode import RRTNode
+from rrtgraph import Graph
 
 
 def point_is_colliding(node, obstacles):
@@ -60,7 +48,7 @@ def nearest(G, node):
     min_dist = float("inf")
 
     for idx, v in enumerate(G.nodes):
-        dist = distance(v.end_effector_pos, node)
+        dist = line.distance(v.end_effector_pos, node)
         if dist < min_dist:
             min_dist = dist
             new_node_index = idx
@@ -92,7 +80,7 @@ def extend_heuristic(G, rand_node, step_size, threshold, obstacles):
         nearest_to_new, nearest_to_new_idx = nearest(G, new_node.end_effector_pos)
 
         newidx = G.add_vex(new_node)
-        dist = distance(new_node.end_effector_pos, nearest_to_new.end_effector_pos)
+        dist = line.distance(new_node.end_effector_pos, nearest_to_new.end_effector_pos)
         G.add_edge(newidx, nearest_to_new_idx, dist)
         return new_node, G.node_to_index[new_node]
 
@@ -105,116 +93,6 @@ def extend_heuristic(G, rand_node, step_size, threshold, obstacles):
         parent.inc_fail_count()
 
     return near_node, near_idx
-
-
-class RRTNode(object):
-    """
-    A node generated in a RRT graph.
-    Args:
-        configuration: list of joint angles in radians. Corresponds to the 6 degrees of freedom on the arm.
-            a1-- the lift angle of the base
-            a2-- the pan angle of the base
-            a3-- the lift angle of the elbow
-            a4-- the pan angle of the elbow
-            a5-- the pan angle of the wrist
-            a6-- how big to open the end effector
-    Instance Attributes:
-        end_effector_pos [np array] : [x, y, z] of the end effector.
-        angles           [np array] : list of joint angles in radians. [a1 ... a6].
-        fail_count        [int]      : amount of times extension heuristic has failed from this node.
-    """
-
-    def __init__(self, configuration):
-        self.angles = configuration
-        self.joint_positions = self.generate_joint_positions()
-        self.end_effector_pos = self.joint_positions[1]
-        self.fail_count = 0
-
-    def forward_kinematics(self, link_lengths):
-        """ Returns the [x, y, z] corresponding the node's angle configuration. """
-
-        angles = np.array([[0], [self.angles[1]], [0], [self.angles[0]], [0]])
-        alpha = np.array([[self.angles[3]], [0], [0], [self.angles[2]], [0]])
-        r = np.array([[0], [link_lengths[1]], [link_lengths[2]], [0], [0]])
-        d = np.array([[link_lengths[0]], [0], [0], [0], [link_lengths[3]]])
-        return FK(angles, alpha, r, d)
-
-    def generate_joint_positions(self):
-        """ Returns the [x, y, z] of the two joints based on the node's angle configuration. """
-        return visualization.joint_positions(*self.angles[0:4])
-
-    def to_nlinkarm(self):
-        """ Creates an instance of NLinkArm using the angle configuration. """
-        arm = collision_detection.NLinkArm(2, [.222, .3])
-        arm.update_pitch([self.angles[0], self.angles[2]])
-        arm.update_yaw([self.angles[1], self.angles[3]])
-
-        return arm
-
-    def inc_fail_count(self):
-        self.fail_count = self.fail_count + 1
-
-
-class Graph:
-    """
-    An RRT graph.
-    Args:
-        start_angles: The initial angles of the arm.
-        end_angles: The desired angles of the arm.
-    Instance Attributes:
-        start_node: Node containing cartesian coordinates and arm angles of the start position.
-        end_node: Node containing cartesian coordinates and arm angles of the end position.
-        nodes: List of all nodes in the graph.
-        edges: List of all pairs (n1, n2) for which there is an edge from node n1 to node n2.
-        success: True if there is a valid path from start_node to end_node.
-        node_to_index: Maps nodes to indexes that are used to find the distance from start_node of each node.
-        neighbors: Maps each node to its neighbors.
-        distances: Maps each node to its shortest known distance from the start node.
-        ranking: List of all intermediate nodes, ordered by distance between the end effector to the target position.
-        sx, sy, sz: The distance between the start and end nodes.
-    """
-    def __init__(self, start_angles, end_angles):
-        self.start_node = RRTNode(start_angles)
-        self.end_node = RRTNode(end_angles)
-
-        self.nodes = [self.start_node]
-        self.edges = []
-        self.success = False
-
-        self.node_to_index = {self.start_node: 0}
-        self.neighbors = {0: []}
-        self.distances = {0: 0.}
-        self.ranking = []
-
-        self.sx = endpos[0] - startpos[0]
-        self.sy = endpos[1] - startpos[1]
-        self.sz = endpos[2] - startpos[2]
-
-    def add_vex(self, node):
-        try:
-            idx = self.node_to_index[node]
-        except:
-            idx = len(self.nodes)
-            self.nodes.append(node)
-            self.node_to_index[node] = idx
-            self.neighbors[idx] = []
-            self.ranking.append(node)
-            self.ranking.sort(key=lambda n: self.dist_to_end(n))
-        return idx
-
-    def add_edge(self, idx1, idx2, cost):
-        self.edges.append((idx1, idx2))
-        self.neighbors[idx1].append((idx2, cost))
-        self.neighbors[idx2].append((idx1, cost))
-
-    def dist_to_end(self, node):
-        return distance(node.end_effector_pos, self.end_node.end_effector_pos)
-
-    def get_parent(self, idx):
-        near_neighbors = self.neighbors[idx]
-        parent_idx = near_neighbors[0][0]
-        node_list = list(self.node_to_index.keys())
-        return node_list[parent_idx]
 
 
 def valid_configuration(a1, a2, a3, a4, a5, a6):
@@ -253,7 +131,7 @@ def random_angle_config(goal_angles, angle_range, i, amt_iter):
 
 def rrt(start_angles, end_angles, obstacles, n_iter, radius, stepSize, threshold):
 
-    G = Graph(start_angles, end_angles)
+    G = Graph(start_angles, end_angles, startpos, endpos)
 
     for i in range(n_iter):
         rand_node = RRTNode(random_angle_config(end_angles, math.pi, i, n_iter))
@@ -273,7 +151,7 @@ def rrt(start_angles, end_angles, obstacles, n_iter, radius, stepSize, threshold
             nearest_to_new, nearest_to_new_idx = nearest(G, new_node.end_effector_pos)
 
             newidx = G.add_vex(new_node)
-            dist = distance(new_node.end_effector_pos, nearest_to_new.end_effector_pos)
+            dist = line.distance(new_node.end_effector_pos, nearest_to_new.end_effector_pos)
             G.add_edge(newidx, nearest_to_new_idx, dist)
 
         else:
@@ -281,8 +159,8 @@ def rrt(start_angles, end_angles, obstacles, n_iter, radius, stepSize, threshold
             if arm_is_colliding(new_node, obstacles):
                 continue
 
-        end_eff_dist_to_goal = distance(new_node.end_effector_pos, G.end_node.end_effector_pos)
-        elbow_dist_to_goal = distance(new_node.joint_positions[0], G.end_node.joint_positions[0])
+        end_eff_dist_to_goal = line.distance(new_node.end_effector_pos, G.end_node.end_effector_pos)
+        elbow_dist_to_goal = line.distance(new_node.joint_positions[0], G.end_node.joint_positions[0])
 
         if end_eff_dist_to_goal < 2 * radius and not G.success:
             endidx = G.add_vex(G.end_node)
