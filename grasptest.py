@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw
 import sys
 import cv2
 import imutils
-from final import grab_points
+from final2 import grab_points
 import os
 
 from typing import Dict
@@ -97,6 +97,7 @@ def plot_label_rect(img, rect):
 
 
 def calc_pred_rect(img, points, gripper_h):
+    """returns array of corner points, polygon of points, and angle"""
     # ================ edge detected grasp point =================
     # gripper_h is taken from labels, just to maintain consistency
     # don't know the specs of the end effector yet so
@@ -146,6 +147,7 @@ def calc_pred_rect(img, points, gripper_h):
 
 
 def plot_pred_rect(img, prect):
+    """input must be an image and nparray of corner points"""
     cv2.polylines(img, [prect], True, (0, 255, 0), 1)
     # cv2.imshow("pred labels", img)
     # cv2.waitKey(0)
@@ -275,6 +277,7 @@ def process_images(path, rgb_line_ending, depth_line_ending, manual):
     # [rgb, d, rgd] holds sum of pred evals. divide by num preds later
     percentages = [0, 0, 0]
     manual_percentages = [0, 0, 0]
+    avg_prediction_time = 0
 
     # stores list of unique image names with line ending removed
     image_names = []
@@ -320,7 +323,9 @@ def process_images(path, rgb_line_ending, depth_line_ending, manual):
         images = [bgr, depth3channel, dgr]  # iterate over for comparison
         width, height = bgr.shape[1], bgr.shape[0]
         for i in range(3):
+            start_time = time.time()
             pred_coords = grab_points(0, 0, width, height, images[i])
+            avg_prediction_time += time.time() - start_time
             # TODO: search image_name.txt file for labels and eval pred
             pred_grasp_valid = eval_pred(
                 images[i], pred_coords, path+image_name+"_grasps.txt", scale)
@@ -350,6 +355,9 @@ def process_images(path, rgb_line_ending, depth_line_ending, manual):
           np.array(percentages) / len(image_names))
     # print incorrectly classified image names, and the channel format
     print("Automatically-identified incorrect preds ", incorrect_preds)
+
+    # print("Average time to calculate prediction for one image",
+    #       avg_prediction_time / len(image_names))
 
     if manual:
         print("Manual rgb, d, rgd percentages: ",
